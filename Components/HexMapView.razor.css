@@ -10,7 +10,7 @@
 
 .hex-map {
     display: block;
-    min-width: 900px;
+    min-width: 680px;
 }
 
 .hex-cell {
@@ -35,6 +35,17 @@
     fill: rgba(255, 179, 71, 0.2);
     stroke: rgba(255, 212, 135, 0.5);
     stroke-width: 0.5;
+}
+
+.hex-bottom-label {
+    pointer-events: none;
+    font-size: 3.1px;
+    fill: #f3f5f8;
+    stroke: #1f2228;
+    stroke-width: 0.5px;
+    paint-order: stroke;
+    font-weight: 700;
+    letter-spacing: 0.1px;
 }
 
 .hex-decal {

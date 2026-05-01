@@ -34,6 +34,8 @@ Blazor WebAssembly prototype for a Battletech-inspired online battlefield map ge
 - Tracks critical component health (engine, gyro, weapons, jump jets) with destruction rolls and gameplay penalties (movement reduction, to-hit penalties, fire disable).
 - Shows retro 1980s "GAME OVER" screen when either mech is destroyed with win/lose messaging and new game option.
 - Hover tooltips on each hex now show terrain type, movement/firing effects, and full mech state when a mech occupies that hex.
+- Hills now generate weighted Battletech-style elevation levels (Level 1 common, Level 2 less common, Level 3 rare); water generates weighted Depth 1/2/3 similarly.
+- Movement and firing now account for level/depth effects (climb costs, depth movement costs, LOS/elevation interactions), and level/depth labels render in the bottom of affected hexes.
 
 ## How generation works
 

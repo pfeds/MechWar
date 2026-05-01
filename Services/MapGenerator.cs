@@ -27,7 +27,10 @@ public sealed class MapGenerator : IMapGenerator
         {
             for (var column = 0; column < width; column++)
             {
-                tiles.Add(new HexTile(column, row, terrain[column, row]));
+                var terrainType = terrain[column, row];
+                int? hillLevel = terrainType == TerrainType.Hills ? RollWeightedLevel(random) : null;
+                int? waterDepth = terrainType == TerrainType.Water ? RollWeightedLevel(random) : null;
+                tiles.Add(new HexTile(column, row, terrainType, hillLevel, waterDepth));
             }
         }
 
@@ -265,5 +268,22 @@ public sealed class MapGenerator : IMapGenerator
     }
 
     private static int ToKey(int column, int row, int width) => row * width + column;
+
+    // Weighted Battletech-style tiers: mostly 1, fewer 2, rare 3.
+    private static int RollWeightedLevel(Random random)
+    {
+        var roll = random.Next(0, 100);
+        if (roll < 70)
+        {
+            return 1;
+        }
+
+        if (roll < 92)
+        {
+            return 2;
+        }
+
+        return 3;
+    }
 }
 

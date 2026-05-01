@@ -5,91 +5,135 @@
 @using MechWar.Services
 @using Microsoft.AspNetCore.Components.Web
 @inject IMapGenerator MapGenerator
+@inject GameUiState UiState
+@implements IDisposable
 
-<PageTitle>MechWar Map Generator</PageTitle>
+<PageTitle>MechWar</PageTitle>
 
-<h1>MechWar Battlefield Generator</h1>
-<p>Generate linked hex terrain for Battletech-inspired battlefields.</p>
-
-<div class="controls">
-	<div class="control-group">
-		<label for="theme">Theme</label>
-		<select id="theme" class="form-select" @bind="SelectedThemeKey">
-			@foreach (var theme in ThemeCatalog.All)
-			{
-				<option value="@theme.Key">@theme.DisplayName</option>
-			}
-		</select>
-	</div>
-
-	<div class="control-group">
-		<label for="width">Width</label>
-		<input id="width" class="form-control" type="number" min="8" max="80" @bind="Width" />
-	</div>
-
-	<div class="control-group">
-		<label for="height">Height</label>
-		<input id="height" class="form-control" type="number" min="8" max="60" @bind="Height" />
-	</div>
-
-	<div class="control-group">
-		<label for="mechClass">Mech Class</label>
-		<select id="mechClass" class="form-select" @bind="SelectedMechClass">
-			<option value="@MechClass.Light">Light</option>
-			<option value="@MechClass.Medium">Medium</option>
-			<option value="@MechClass.Heavy">Heavy</option>
-		</select>
-	</div>
-
-</div>
-
-<div class="mb-3">
-	<button class="btn btn-primary" @onclick="GenerateMap">Generate Map</button>
-	<button class="btn btn-outline-primary ms-2" @onclick="DeployUserMech">Deploy Mech</button>
-	<button class="btn btn-danger ms-2" @onclick="ResolvePlayerAttack" disabled="@(UserMech is null || EnemyMech is null || !IsPlayerPhase || !CanPlayerFire)">Fire (F)</button>
-	<button class="btn btn-outline-secondary ms-2" @onclick="EndPlayerTurn" disabled="@(UserMech is null || !IsPlayerPhase)">End Turn</button>
-</div>
-
-<div class="mode-controls mb-3">
-	<span class="mode-label">Movement Mode:</span>
-	<button class="btn btn-sm @GetModeButtonClass(MovementMode.Walk)" @onclick="() => TrySetMovementMode(MovementMode.Walk)">Walk (1/W)</button>
-	<button class="btn btn-sm @GetModeButtonClass(MovementMode.Run)" @onclick="() => TrySetMovementMode(MovementMode.Run)">Run (2/R)</button>
-	<button class="btn btn-sm @GetModeButtonClass(MovementMode.Jump)" @onclick="() => TrySetMovementMode(MovementMode.Jump)">Jump (3/J)</button>
-</div>
-
-@if (CurrentMap is not null)
-{
-	<p>
-		Theme: <strong>@CurrentMap.Theme.DisplayName</strong>
-		| Size: <strong>@CurrentMap.Width x @CurrentMap.Height</strong>
-		@if (UserMech is not null)
+<div class="battlefield-layout">
+	<section class="map-column">
+		@if (CurrentMap is not null)
 		{
-			<span>
+			<p class="map-meta">
+				Theme: <strong>@CurrentMap.Theme.DisplayName</strong>
+				| Size: <strong>@CurrentMap.Width x @CurrentMap.Height</strong>
 				| Round: <strong>@RoundNumber</strong>
 				| Phase: <strong>@(IsPlayerPhase ? "Player" : "Enemy")</strong>
-				| Mech: <strong>@UserMech.Class</strong>
-				| Facing: <strong>@UserMech.Facing</strong>
-				| Mode: <strong>@ActiveMovementMode</strong>
-				| Movement: <strong>@UserMech.RemainingMovement/@UserMech.MaxMovement</strong>
-			</span>
+			</p>
 		}
-	</p>
-}
 
-<div class="battlefield-input"
-	 tabindex="0"
-	 @ref="BattlefieldInputRef"
-	 @onclick="FocusBattlefield"
-	 @onkeydown="HandleBattlefieldKey"
-	 @onkeydown:preventDefault="true">
-	<HexMapView
-		Map="CurrentMap"
-		Mech="UserMech"
-		EnemyMech="EnemyMech"
-		PlayerArcTiles="PlayerFiringArcTiles"
-		PlayerMechTooltip="@BuildPlayerMechTooltip()"
-		EnemyMechTooltip="@BuildEnemyMechTooltip()" />
+		<div class="battlefield-input"
+			 tabindex="0"
+			 @ref="BattlefieldInputRef"
+			 @onclick="FocusBattlefield"
+			 @onkeydown="HandleBattlefieldKey"
+			 @onkeydown:preventDefault="true">
+			<HexMapView
+				Map="CurrentMap"
+				Mech="UserMech"
+				EnemyMech="EnemyMech"
+				PlayerArcTiles="PlayerFiringArcTiles"
+				PlayerMechTooltip="@BuildPlayerMechTooltip()"
+				EnemyMechTooltip="@BuildEnemyMechTooltip()" />
+		</div>
+
+		@if (CurrentMap is not null)
+		{
+			<div class="legend">
+				@foreach (var terrain in CurrentMap.Tiles.Select(tile => tile.Terrain).Distinct().OrderBy(t => t.ToString()))
+				{
+					<span class="legend-item">
+						<span class="legend-swatch" style="background-color:@TerrainCatalog.GetColor(terrain)"></span>
+						@TerrainCatalog.GetLabel(terrain)
+					</span>
+				}
+			</div>
+		}
+	</section>
+
+	<aside class="control-panel">
+
+		<section class="panel-card">
+			<h3>Turn Controls</h3>
+			<div class="mode-controls">
+				<span class="mode-label">Mode:</span>
+				<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Walk)" @onclick="() => TrySetMovementMode(MovementMode.Walk)">Walk</button>
+				<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Run)" @onclick="() => TrySetMovementMode(MovementMode.Run)">Run</button>
+				<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Jump)" @onclick="() => TrySetMovementMode(MovementMode.Jump)">Jump</button>
+			</div>
+			<div class="button-row mt-2">
+				<button class="btn btn-sm turn-btn btn-danger" @onclick="ResolvePlayerAttack" disabled="@(UserMech is null || EnemyMech is null || !IsPlayerPhase || !CanPlayerFire)">Fire (F)</button>
+				<button class="btn btn-sm turn-btn btn-outline-secondary" @onclick="EndPlayerTurn" disabled="@(UserMech is null || !IsPlayerPhase)">End Turn</button>
+			</div>
+			<p class="control-hint">Arrows: rotate/move, 1/2/3 or W/R/J for mode, F/Space to fire.</p>
+		</section>
+
+		<section class="panel-card">
+			<h3>Player Mech Status</h3>
+			<pre class="status-block">@BuildPlayerMechTooltip()</pre>
+		</section>
+
+		<section class="panel-card">
+			<h3>Enemy Mech Status</h3>
+			<pre class="status-block">@BuildEnemyMechTooltip()</pre>
+		</section>
+
+		<section class="panel-card console-panel">
+			<h3>Console Output</h3>
+			<div class="matrix-console">
+				@foreach (var line in CombatLog)
+				{
+					<div>@line</div>
+				}
+			</div>
+		</section>
+	</aside>
 </div>
+
+@if (UiState.ShowCreateGamePopup)
+{
+	<div class="create-game-overlay" @onclick="CloseCreateGamePopup">
+		<div class="create-game-dialog" @onclick:stopPropagation="true">
+			<h2>Create New Game</h2>
+			<div class="controls popup-controls">
+				<div class="control-group">
+					<label for="theme">Theme</label>
+					<select id="theme" class="form-select form-select-sm" @bind="SelectedThemeKey">
+						@foreach (var theme in ThemeCatalog.All)
+						{
+							<option value="@theme.Key">@theme.DisplayName</option>
+						}
+					</select>
+				</div>
+				<div class="control-group">
+					<label for="width">Width</label>
+					<input id="width" class="form-control form-control-sm" type="number" min="@MinMapWidth" max="@MaxMapWidth" @bind="Width" />
+				</div>
+				<div class="control-group">
+					<label for="height">Height</label>
+					<input id="height" class="form-control form-control-sm" type="number" min="@MinMapHeight" max="@MaxMapHeight" @bind="Height" />
+				</div>
+				<div class="control-group">
+					<label for="mechClass">Player Mech Class</label>
+					<select id="mechClass" class="form-select form-select-sm" @bind="SelectedMechClass">
+						<option value="@MechClass.Light">Light</option>
+						<option value="@MechClass.Medium">Medium</option>
+						<option value="@MechClass.Heavy">Heavy</option>
+					</select>
+				</div>
+			</div>
+			@if (!IsCreateGameFormValid)
+			{
+				<p class="create-game-validation">@CreateGameValidationMessage</p>
+			}
+			<p class="spawn-preview">@CreateGameSpawnPreview</p>
+			<div class="button-row mt-3">
+				<button class="btn btn-primary" @onclick="GenerateFromPopup" disabled="@(!IsCreateGameFormValid)">Generate</button>
+				<button class="btn btn-outline-secondary" @onclick="CloseCreateGamePopup">Cancel</button>
+			</div>
+		</div>
+	</div>
+}
 
 @if (IsGameOver)
 {
@@ -106,44 +150,10 @@
 	</div>
 }
 
-@if (!string.IsNullOrWhiteSpace(LastActionMessage))
-{
-	<p class="turn-message">@LastActionMessage</p>
-}
-
-@if (UserMech is not null && EnemyMech is not null)
-{
-	<div class="combat-status">
-		<span><strong>Player Armor/Internal:</strong> @PlayerArmor / @PlayerInternal</span>
-		<span><strong>Enemy Armor/Internal:</strong> @EnemyArmor / @EnemyInternal</span>
-		<span><strong>Player Heat:</strong> @PlayerHeat (@(PlayerShutdown ? "Shutdown" : "Online"))</span>
-		<span><strong>Enemy Heat:</strong> @EnemyHeat (@(EnemyShutdown ? "Shutdown" : "Online"))</span>
-		<span><strong>Ammo:</strong> P @(PlayerAmmoIntact ? "Safe" : "Exploded") | E @(EnemyAmmoIntact ? "Safe" : "Exploded")</span>
-		<span><strong>Dmg:</strong> 
-			Player @GetComponentSummary(PlayerComponents) | 
-			Enemy @GetComponentSummary(EnemyComponents)</span>
-		<span><strong>To-Hit:</strong> @GetPlayerToHitDisplay()</span>
-	</div>
-}
-
-<p class="control-hint">Click the map area and use arrow keys: Left/Right rotate, Up forward, Down backward. Switch mode with 1/2/3 or W/R/J, and fire with F or Space.</p>
-
-@if (CurrentMap is not null)
-{
-	<div class="legend">
-		@foreach (var terrain in CurrentMap.Tiles.Select(tile => tile.Terrain).Distinct().OrderBy(t => t.ToString()))
-		{
-			<span class="legend-item">
-				<span class="legend-swatch" style="background-color:@TerrainCatalog.GetColor(terrain)"></span>
-				@TerrainCatalog.GetLabel(terrain)
-			</span>
-		}
-	</div>
-}
-
 @code {
 	private readonly HashSet<(int Column, int Row)> PlayerFiringArcTiles = new();
 	private readonly Dictionary<(int Column, int Row), TerrainType> TerrainByCoordinate = new();
+	private readonly Dictionary<(int Column, int Row), HexTile> TileByCoordinate = new();
 	private readonly Dictionary<HitLocation, SectionState> PlayerSections = new();
 	private readonly Dictionary<HitLocation, SectionState> EnemySections = new();
 	private readonly Dictionary<HitLocation, List<ComponentStatus>> PlayerComponents = new();
@@ -161,7 +171,17 @@
 	private ElementReference BattlefieldInputRef { get; set; }
 	private int RoundNumber { get; set; } = 1;
 	private bool IsPlayerPhase { get; set; } = true;
-	private string LastActionMessage { get; set; } = string.Empty;
+	private readonly List<string> CombatLog = new();
+	private string _lastActionMessage = string.Empty;
+	private string LastActionMessage
+	{
+		get => _lastActionMessage;
+		set
+		{
+			_lastActionMessage = value;
+			AddConsoleLine(value);
+		}
+	}
 	private int PlayerArmor { get; set; }
 	private int PlayerInternal { get; set; }
 	private int EnemyArmor { get; set; }
@@ -185,6 +205,31 @@
 	private const int WeaponHeat = 4;
 	private const int HeatSinkValue = 6;
 	private const int CriticalHitThreshold = 10;
+	private const int MinMapWidth = 8;
+	private const int MaxMapWidth = 80;
+	private const int MinMapHeight = 8;
+	private const int MaxMapHeight = 60;
+
+	private bool IsCreateGameFormValid =>
+		Width >= MinMapWidth && Width <= MaxMapWidth && Height >= MinMapHeight && Height <= MaxMapHeight;
+
+	private string CreateGameValidationMessage =>
+		$"Map size must be between {MinMapWidth}-{MaxMapWidth} wide and {MinMapHeight}-{MaxMapHeight} high.";
+
+	private string CreateGameSpawnPreview
+	{
+		get
+		{
+			if (!IsCreateGameFormValid)
+			{
+				return "Set a valid map size to preview spawn bands.";
+			}
+
+			var minDistance = GetMinSpawnDistance(Width);
+			var maxDistance = GetMaxSpawnDistance(Width, minDistance);
+			return $"Spawn preview: each mech spawns on opposite sides, {minDistance}-{maxDistance} hexes from its edge, any row 0-{Height - 1}.";
+		}
+	}
 
 	private readonly record struct ComponentStatus(ComponentType Type, bool IsDestroyed);
 
@@ -220,19 +265,26 @@
 
 	protected override void OnInitialized()
 	{
-		GenerateMap();
+		UiState.StateChanged += HandleUiStateChanged;
+	}
+
+	public void Dispose()
+	{
+		UiState.StateChanged -= HandleUiStateChanged;
 	}
 
 	protected override async Task OnAfterRenderAsync(bool firstRender)
 	{
 		if (firstRender)
 		{
-			await FocusBattlefield();
+			UiState.OpenCreateGamePopup();
 		}
 	}
 
 	private void GenerateMap()
 	{
+		Width = Math.Clamp(Width, MinMapWidth, MaxMapWidth);
+		Height = Math.Clamp(Height, MinMapHeight, MaxMapHeight);
 		var theme = ThemeCatalog.Get(SelectedThemeKey);
 		CurrentSeed = Random.Shared.Next(int.MinValue, int.MaxValue);
 		CurrentMap = MapGenerator.Generate(theme, Width, Height, CurrentSeed);
@@ -243,6 +295,7 @@
 	private void BuildTerrainIndex()
 	{
 		TerrainByCoordinate.Clear();
+		TileByCoordinate.Clear();
 
 		if (CurrentMap is null)
 		{
@@ -252,6 +305,7 @@
 		foreach (var tile in CurrentMap.Tiles)
 		{
 			TerrainByCoordinate[(tile.Column, tile.Row)] = tile.Terrain;
+			TileByCoordinate[(tile.Column, tile.Row)] = tile;
 		}
 	}
 
@@ -262,12 +316,15 @@
 			return;
 		}
 
-		var playerSpawn = FindSpawnTile();
+		var playerOnLeft = Random.Shared.Next(0, 2) == 0;
+		var playerSpawn = FindSideSpawnTile(playerOnLeft);
 		var playerMovement = GetMovementByClassAndMode(SelectedMechClass, ActiveMovementMode);
-		UserMech = new PlayerMech(SelectedMechClass, playerSpawn.Column, playerSpawn.Row, HexDirection.East, playerMovement, playerMovement);
+		var playerFacing = playerOnLeft ? HexDirection.East : HexDirection.West;
+		UserMech = new PlayerMech(SelectedMechClass, playerSpawn.Column, playerSpawn.Row, playerFacing, playerMovement, playerMovement);
 
-		var enemySpawn = FindEnemySpawnTile(playerSpawn);
-		EnemyMech = new PlayerMech(MechClass.Medium, enemySpawn.Column, enemySpawn.Row, HexDirection.West, 0, 0);
+		var enemySpawn = FindSideSpawnTile(!playerOnLeft);
+		var enemyFacing = playerOnLeft ? HexDirection.West : HexDirection.East;
+		EnemyMech = new PlayerMech(MechClass.Medium, enemySpawn.Column, enemySpawn.Row, enemyFacing, 0, 0);
 
 		RoundNumber = 1;
 		IsPlayerPhase = true;
@@ -289,6 +346,50 @@
 		UpdatePlayerFiringArc();
 		LastActionMessage = $"{SelectedMechClass} mech deployed. Round 1 starts in {ActiveMovementMode} mode.";
 	}
+
+	private (int Column, int Row) FindSideSpawnTile(bool leftSide)
+	{
+		if (CurrentMap is null)
+		{
+			return (0, 0);
+		}
+
+		var minDistance = GetMinSpawnDistance(CurrentMap.Width);
+		var maxDistance = GetMaxSpawnDistance(CurrentMap.Width, minDistance);
+		var preferredColumns = new List<int>();
+
+		for (var distance = minDistance; distance <= maxDistance; distance++)
+		{
+			var column = leftSide ? distance : (CurrentMap.Width - 1 - distance);
+			if (column >= 0 && column < CurrentMap.Width)
+			{
+				preferredColumns.Add(column);
+			}
+		}
+
+		preferredColumns = preferredColumns.Distinct().ToList();
+
+		var shuffledRows = Enumerable.Range(0, CurrentMap.Height)
+			.OrderBy(_ => Random.Shared.Next())
+			.ToList();
+
+		foreach (var column in preferredColumns.OrderBy(_ => Random.Shared.Next()))
+		{
+			foreach (var row in shuffledRows)
+			{
+				if (IsTraversable(column, row))
+				{
+					return (column, row);
+				}
+			}
+		}
+
+		return FindSpawnTile();
+	}
+
+	private static int GetMinSpawnDistance(int mapWidth) => Math.Min(3, Math.Max(1, (mapWidth / 2) - 1));
+
+	private static int GetMaxSpawnDistance(int mapWidth, int minDistance) => Math.Min(6, Math.Max(minDistance, mapWidth - 2));
 
 	private (int Column, int Row) FindSpawnTile()
 	{
@@ -349,6 +450,29 @@
 	private async Task FocusBattlefield()
 	{
 		await BattlefieldInputRef.FocusAsync();
+	}
+
+	private void HandleUiStateChanged()
+	{
+		InvokeAsync(StateHasChanged);
+	}
+
+	private void CloseCreateGamePopup()
+	{
+		UiState.CloseCreateGamePopup();
+	}
+
+	private async Task GenerateFromPopup()
+	{
+		if (!IsCreateGameFormValid)
+		{
+			LastActionMessage = CreateGameValidationMessage;
+			return;
+		}
+
+		UiState.CloseCreateGamePopup();
+		GenerateMap();
+		await FocusBattlefield();
 	}
 
 	private void HandleBattlefieldKey(KeyboardEventArgs args)
@@ -500,16 +624,17 @@
 			return;
 		}
 
-		if (!TerrainByCoordinate.TryGetValue((destination.Column, destination.Row), out var terrain))
+		if (!TileByCoordinate.TryGetValue((destination.Column, destination.Row), out var destinationTile))
 		{
 			LastActionMessage = "Destination terrain could not be resolved.";
 			return;
 		}
 
-		var moveCost = GetMoveCost(terrain, forward, ActiveMovementMode);
+		TileByCoordinate.TryGetValue((UserMech.Column, UserMech.Row), out var originTile);
+		var moveCost = GetMoveCost(destinationTile, forward, ActiveMovementMode, originTile);
 		if (moveCost >= 99)
 		{
-			LastActionMessage = $"{TerrainCatalog.GetLabel(terrain)} is impassable in {ActiveMovementMode} mode.";
+			LastActionMessage = $"{TerrainCatalog.GetLabel(destinationTile.Terrain)} is impassable in {ActiveMovementMode} mode.";
 			return;
 		}
 
@@ -530,7 +655,7 @@
 
 		UpdatePlayerFiringArc();
 		var movementKind = forward ? "forward" : "backward";
-		LastActionMessage = $"Moved {movementKind} in {ActiveMovementMode} mode into {TerrainCatalog.GetLabel(terrain)} ({moveCost} MP).";
+		LastActionMessage = $"Moved {movementKind} in {ActiveMovementMode} mode into {TerrainCatalog.GetLabel(destinationTile.Terrain)} ({moveCost} MP).";
 	}
 
 	private bool CanPlayerFire =>
@@ -563,11 +688,17 @@
 			return;
 		}
 
+		if (!CanFireBetween(UserMech.Column, UserMech.Row, EnemyMech.Column, EnemyMech.Row, out var losBlockedMessage, out var terrainFiringModifier))
+		{
+			LastActionMessage = losBlockedMessage;
+			return;
+		}
+
 		var attackerModifier = GetAttackerMovementModifier(ActiveMovementMode);
 		var targetModifier = GetTargetMovementModifier(EnemyHexesMovedLastTurn);
 		var heatModifier = GetHeatToHitModifier(PlayerHeat);
 		var gyroModifier = IsComponentDestroyed(PlayerComponents, ComponentType.Gyro) ? 2 : 0;
-		var targetNumber = BaseToHit + rangeModifier + attackerModifier + targetModifier + heatModifier + gyroModifier;
+		var targetNumber = BaseToHit + rangeModifier + attackerModifier + targetModifier + heatModifier + gyroModifier + terrainFiringModifier;
 		var roll = Roll2d6();
 
 		HasPlayerFiredThisTurn = true;
@@ -624,12 +755,17 @@
 			return "No shot (out of range)";
 		}
 
+		if (!CanFireBetween(UserMech.Column, UserMech.Row, EnemyMech.Column, EnemyMech.Row, out var losBlockedMessage, out var terrainFiringModifier))
+		{
+			return losBlockedMessage;
+		}
+
 		var attackerModifier = GetAttackerMovementModifier(ActiveMovementMode);
 		var targetModifier = GetTargetMovementModifier(EnemyHexesMovedLastTurn);
 		var heatModifier = GetHeatToHitModifier(PlayerHeat);
 		var gyroModifier = IsComponentDestroyed(PlayerComponents, ComponentType.Gyro) ? 2 : 0;
-		var targetNumber = BaseToHit + rangeModifier + attackerModifier + targetModifier + heatModifier + gyroModifier;
-		return $"{targetNumber}+ (base {BaseToHit} + range {rangeModifier} + move {attackerModifier} + target {targetModifier} + heat {heatModifier})";
+		var targetNumber = BaseToHit + rangeModifier + attackerModifier + targetModifier + heatModifier + gyroModifier + terrainFiringModifier;
+		return $"{targetNumber}+ (base {BaseToHit} + range {rangeModifier} + move {attackerModifier} + target {targetModifier} + heat {heatModifier} + terrain {terrainFiringModifier})";
 	}
 
 	private void EndPlayerTurn()
@@ -728,12 +864,13 @@
 			var target = Step(enemy.Column, enemy.Row, enemy.Facing);
 			if (!IsWithinMap(target.Column, target.Row) ||
 				(target.Column == UserMech.Column && target.Row == UserMech.Row) ||
-				!TerrainByCoordinate.TryGetValue((target.Column, target.Row), out var terrain))
+				!TileByCoordinate.TryGetValue((target.Column, target.Row), out var targetTile))
 			{
 				break;
 			}
 
-			var cost = GetMoveCost(terrain, true, MovementMode.Walk);
+			TileByCoordinate.TryGetValue((enemy.Column, enemy.Row), out var enemyOriginTile);
+			var cost = GetMoveCost(targetTile, true, MovementMode.Walk, enemyOriginTile);
 			if (cost >= 99 || enemy.RemainingMovement < cost)
 			{
 				break;
@@ -760,10 +897,16 @@
 			var rangeModifier = GetRangeModifier(range);
 			if (rangeModifier < 99)
 			{
+				if (!CanFireBetween(enemy.Column, enemy.Row, UserMech.Column, UserMech.Row, out var enemyLosBlockedMessage, out var enemyTerrainModifier))
+				{
+					actions.Add(enemyLosBlockedMessage);
+				}
+				else
+				{
 				EnemyHeat += WeaponHeat;
 				var heatModifier = GetHeatToHitModifier(EnemyHeat);
 				var enemyGyroModifier = IsComponentDestroyed(EnemyComponents, ComponentType.Gyro) ? 2 : 0;
-				var targetNumber = BaseToHit + rangeModifier + GetAttackerMovementModifier(MovementMode.Walk) + GetTargetMovementModifier(PlayerHexesMovedThisTurn) + heatModifier + enemyGyroModifier;
+				var targetNumber = BaseToHit + rangeModifier + GetAttackerMovementModifier(MovementMode.Walk) + GetTargetMovementModifier(PlayerHexesMovedThisTurn) + heatModifier + enemyGyroModifier + enemyTerrainModifier;
 				var roll = Roll2d6();
 				if (roll >= targetNumber)
 				{
@@ -787,6 +930,7 @@
 				{
 					actions.Add($"miss ({roll}/{targetNumber})");
 					LastEnemyAttackMessage = "Enemy fire missed.";
+				}
 				}
 			}
 		}
@@ -855,12 +999,12 @@
 
 	private bool IsTraversable(int column, int row)
 	{
-		if (!TerrainByCoordinate.TryGetValue((column, row), out var terrain))
+		if (!TileByCoordinate.TryGetValue((column, row), out var tile))
 		{
 			return false;
 		}
 
-		return GetTerrainMoveCost(terrain) < 99;
+		return GetTerrainMoveCost(tile) < 99;
 	}
 
 	private bool IsWithinMap(int column, int row) =>
@@ -1272,11 +1416,17 @@
 		bool ammoIntact,
 		MovementMode mode)
 	{
+		TileByCoordinate.TryGetValue((mech.Column, mech.Row), out var occupiedTile);
+		var terrainContext = occupiedTile is null
+			? "Unknown"
+			: BuildTileContext(occupiedTile);
+
 		var lines = new List<string>
 		{
 			title,
 			$"Class: {mech.Class}",
 			$"Facing: {mech.Facing}",
+			$"Hex: ({mech.Column}, {mech.Row}) {terrainContext}",
 			$"Mode: {mode}",
 			$"Movement: {mech.RemainingMovement}/{mech.MaxMovement}",
 			$"Heat: {heat} ({(shutdown ? "Shutdown" : "Online")})",
@@ -1314,6 +1464,21 @@
 		return string.Join("\n", lines);
 	}
 
+	private static string BuildTileContext(HexTile tile)
+	{
+		if (tile.HillLevel is int hillLevel)
+		{
+			return $"{TerrainCatalog.GetLabel(tile.Terrain)} Level {hillLevel}";
+		}
+
+		if (tile.WaterDepth is int waterDepth)
+		{
+			return $"{TerrainCatalog.GetLabel(tile.Terrain)} Depth {waterDepth}";
+		}
+
+		return TerrainCatalog.GetLabel(tile.Terrain);
+	}
+
 	private static string FormatComponentType(ComponentType type) => type switch
 	{
 		ComponentType.Engine => "Engine",
@@ -1341,7 +1506,27 @@
 	{
 		IsGameOver = false;
 		PlayerWon = false;
+		CombatLog.Clear();
 		GenerateMap();
+	}
+
+	private void AddConsoleLine(string? line)
+	{
+		if (string.IsNullOrWhiteSpace(line))
+		{
+			return;
+		}
+
+		if (CombatLog.Count > 0 && CombatLog[^1] == line)
+		{
+			return;
+		}
+
+		CombatLog.Add($"> {line}");
+		if (CombatLog.Count > 120)
+		{
+			CombatLog.RemoveAt(0);
+		}
 	}
 
 	private static int GetArmorByClass(MechClass mechClass) => mechClass switch
@@ -1395,24 +1580,202 @@
 
 	private static int Roll2d6() => Random.Shared.Next(1, 7) + Random.Shared.Next(1, 7);
 
-	private static int GetMoveCost(TerrainType terrain, bool forward, MovementMode movementMode)
+	private int GetMoveCost(HexTile destinationTile, bool forward, MovementMode movementMode, HexTile? originTile)
 	{
 		if (movementMode == MovementMode.Jump)
 		{
 			return 1;
 		}
 
-		return GetTerrainMoveCost(terrain) + (forward ? 0 : 1);
+		var baseCost = GetTerrainMoveCost(destinationTile);
+		if (baseCost >= 99)
+		{
+			return baseCost;
+		}
+
+		var originLevel = GetTileLevel(originTile);
+		var destinationLevel = GetTileLevel(destinationTile);
+		var climbCost = Math.Max(0, destinationLevel - originLevel);
+
+		return baseCost + climbCost + (forward ? 0 : 1);
 	}
 
-	private static int GetTerrainMoveCost(TerrainType terrain) => terrain switch
+	private static int GetTerrainMoveCost(HexTile tile)
 	{
-		TerrainType.Plains or TerrainType.Rock or TerrainType.Urban or TerrainType.Crater or TerrainType.Scrub or TerrainType.Sand or TerrainType.Ice => 1,
-		TerrainType.Hills or TerrainType.Forest or TerrainType.Jungle or TerrainType.Canyon => 2,
-		TerrainType.Swamp or TerrainType.Water => 3,
-		TerrainType.Mountains => 99,
-		_ => 1
-	};
+		if (tile.Terrain == TerrainType.Mountains)
+		{
+			return 99;
+		}
+
+		if (tile.Terrain == TerrainType.Water)
+		{
+			return tile.WaterDepth switch
+			{
+				1 => 2,
+				2 => 3,
+				3 => 4,
+				_ => 2
+			};
+		}
+
+		return tile.Terrain switch
+		{
+			TerrainType.Plains or TerrainType.Rock or TerrainType.Urban or TerrainType.Crater or TerrainType.Scrub or TerrainType.Sand or TerrainType.Ice => 1,
+			TerrainType.Hills or TerrainType.Forest or TerrainType.Jungle or TerrainType.Canyon => 2,
+			TerrainType.Swamp => 3,
+			_ => 1
+		};
+	}
+
+	private bool CanFireBetween(
+		int attackerColumn,
+		int attackerRow,
+		int targetColumn,
+		int targetRow,
+		out string blockedMessage,
+		out int terrainFiringModifier)
+	{
+		blockedMessage = string.Empty;
+		terrainFiringModifier = 0;
+
+		if (!TileByCoordinate.TryGetValue((attackerColumn, attackerRow), out var attackerTile) ||
+			!TileByCoordinate.TryGetValue((targetColumn, targetRow), out var targetTile))
+		{
+			blockedMessage = "No shot (terrain data unavailable)";
+			return false;
+		}
+
+		if (targetTile.WaterDepth is >= 2)
+		{
+			terrainFiringModifier += 1;
+		}
+
+		if (targetTile.HillLevel is >= 2)
+		{
+			terrainFiringModifier += 1;
+		}
+
+		if (IsLineBlockedByInterveningTerrain(attackerColumn, attackerRow, targetColumn, targetRow, attackerTile, targetTile))
+		{
+			blockedMessage = "No shot (line of sight blocked by elevation)";
+			return false;
+		}
+
+		return true;
+	}
+
+	private bool IsLineBlockedByInterveningTerrain(
+		int attackerColumn,
+		int attackerRow,
+		int targetColumn,
+		int targetRow,
+		HexTile attackerTile,
+		HexTile targetTile)
+	{
+		var attackerLevel = GetTileLevel(attackerTile);
+		var targetLevel = GetTileLevel(targetTile);
+		var blockingThreshold = Math.Max(attackerLevel, targetLevel) + 1;
+
+		foreach (var point in GetHexLine(attackerColumn, attackerRow, targetColumn, targetRow))
+		{
+			if ((point.Column == attackerColumn && point.Row == attackerRow) ||
+				(point.Column == targetColumn && point.Row == targetRow))
+			{
+				continue;
+			}
+
+			if (!TileByCoordinate.TryGetValue((point.Column, point.Row), out var interveningTile))
+			{
+				continue;
+			}
+
+			if (GetTileLevel(interveningTile) >= blockingThreshold)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static int GetTileLevel(HexTile? tile)
+	{
+		if (tile is null)
+		{
+			return 0;
+		}
+
+		if (tile.HillLevel is int hillLevel)
+		{
+			return hillLevel;
+		}
+
+		if (tile.WaterDepth is int waterDepth)
+		{
+			return -waterDepth;
+		}
+
+		return 0;
+	}
+
+	private static IEnumerable<(int Column, int Row)> GetHexLine(int columnA, int rowA, int columnB, int rowB)
+	{
+		var start = OddRToCube(columnA, rowA);
+		var end = OddRToCube(columnB, rowB);
+		var distance = CubeDistance(columnA, rowA, columnB, rowB);
+
+		if (distance == 0)
+		{
+			yield return (columnA, rowA);
+			yield break;
+		}
+
+		for (var step = 0; step <= distance; step++)
+		{
+			var t = step / (double)distance;
+			var interpolated = CubeLerp(start, end, t);
+			var rounded = CubeRound(interpolated);
+			yield return CubeToOddR(rounded);
+		}
+	}
+
+	private static CubeD CubeLerp(Cube from, Cube to, double t) => new(
+		from.X + ((to.X - from.X) * t),
+		from.Y + ((to.Y - from.Y) * t),
+		from.Z + ((to.Z - from.Z) * t));
+
+	private static Cube CubeRound(CubeD cube)
+	{
+		var rx = (int)Math.Round(cube.X);
+		var ry = (int)Math.Round(cube.Y);
+		var rz = (int)Math.Round(cube.Z);
+
+		var xDiff = Math.Abs(rx - cube.X);
+		var yDiff = Math.Abs(ry - cube.Y);
+		var zDiff = Math.Abs(rz - cube.Z);
+
+		if (xDiff > yDiff && xDiff > zDiff)
+		{
+			rx = -ry - rz;
+		}
+		else if (yDiff > zDiff)
+		{
+			ry = -rx - rz;
+		}
+		else
+		{
+			rz = -rx - ry;
+		}
+
+		return new Cube(rx, ry, rz);
+	}
+
+	private static (int Column, int Row) CubeToOddR(Cube cube)
+	{
+		var row = cube.Z;
+		var column = cube.X + ((row - (row & 1)) / 2);
+		return (column, row);
+	}
 
 	private static (int Column, int Row) Step(int column, int row, HexDirection direction)
 	{
@@ -1496,6 +1859,8 @@
 		var y = -x - z;
 		return new Cube(x, y, z);
 	}
+
+	private readonly record struct CubeD(double X, double Y, double Z);
 
 	private readonly record struct Cube(int X, int Y, int Z);
 }

@@ -73,6 +73,7 @@ else
                 var centerX = GetHexCenterX(tile.Column, tile.Row);
                 var centerY = GetHexCenterY(tile.Row);
                 var decal = GetTileDecal(tile);
+                var tileLabel = GetTileBottomLabel(tile);
                 var inPlayerArc = PlayerArcTiles?.Contains((tile.Column, tile.Row)) == true;
                 <g class="hex-tile">
                     <title>@BuildTileTooltip(tile)</title>
@@ -95,6 +96,14 @@ else
                         <g class="hex-decal" transform="@GetDecalTransform(centerX, centerY, decal)">
                             <use href="#@decal.SymbolId" opacity="@FormatNumber(decal.Opacity)" />
                         </g>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(tileLabel))
+                    {
+                        <svg:text
+                            x="@FormatNumber(centerX)"
+                            y="@FormatNumber(centerY + (HexSize * 0.62))"
+                            class="hex-bottom-label"
+                            text-anchor="middle">@tileLabel</svg:text>
                     }
                 </g>
             }
@@ -194,10 +203,16 @@ else
     private string BuildTileTooltip(HexTile tile)
     {
         var terrainLabel = TerrainCatalog.GetLabel(tile.Terrain);
-        var movement = GetMovementTooltip(tile.Terrain);
-        var firing = GetFiringTooltip(tile.Terrain);
+        var movement = GetMovementTooltip(tile);
+        var firing = GetFiringTooltip(tile);
 
-        var tooltip = $"Hex ({tile.Column}, {tile.Row})\nTerrain: {terrainLabel}\nMovement: {movement}\nFiring: {firing}";
+        var elevationText = tile.HillLevel is int hillLevel
+            ? $"\nElevation: Level {hillLevel}"
+            : tile.WaterDepth is int depth
+                ? $"\nWater: Depth {depth}"
+                : string.Empty;
+
+        var tooltip = $"Hex ({tile.Column}, {tile.Row})\nTerrain: {terrainLabel}{elevationText}\nMovement: {movement}\nFiring: {firing}";
 
         if (Mech is not null && Mech.Column == tile.Column && Mech.Row == tile.Row && !string.IsNullOrWhiteSpace(PlayerMechTooltip))
         {
@@ -212,20 +227,53 @@ else
         return tooltip;
     }
 
-    private static string GetMovementTooltip(TerrainType terrain) => terrain switch
+    private static string GetMovementTooltip(HexTile tile)
     {
-        TerrainType.Mountains => "Impassable for walk/run; jump can cross at 1 MP",
-        TerrainType.Swamp or TerrainType.Water => "Walk/Run: 3 MP, Jump: 1 MP",
-        TerrainType.Hills or TerrainType.Forest or TerrainType.Jungle or TerrainType.Canyon => "Walk/Run: 2 MP, Jump: 1 MP",
-        _ => "Walk/Run: 1 MP, Jump: 1 MP"
-    };
+        if (tile.Terrain == TerrainType.Mountains)
+        {
+            return "Impassable for walk/run; jump can cross at 1 MP";
+        }
 
-    private static string GetFiringTooltip(TerrainType terrain) => terrain switch
+        if (tile.WaterDepth is int depth)
+        {
+            return $"Walk/Run: {depth + 1} MP; Jump: 1 MP";
+        }
+
+        var hillText = tile.HillLevel is int hillLevel
+            ? $" +{hillLevel} climb MP when entering from lower elevation"
+            : string.Empty;
+
+        var baseCost = tile.Terrain switch
+        {
+            TerrainType.Hills or TerrainType.Forest or TerrainType.Jungle or TerrainType.Canyon => 2,
+            TerrainType.Swamp => 3,
+            _ => 1
+        };
+
+        return $"Walk/Run: {baseCost} MP{hillText}; Jump: 1 MP";
+    }
+
+    private static string GetFiringTooltip(HexTile tile)
     {
-        TerrainType.Forest or TerrainType.Jungle => "No direct terrain to-hit modifier currently (cover rules pending)",
-        TerrainType.Mountains => "No direct terrain to-hit modifier currently (LOS blocking pending)",
-        _ => "No direct terrain to-hit modifier in current rules"
-    };
+        if (tile.WaterDepth is >= 2)
+        {
+            return "Target in depth 2+ water: +1 to-hit modifier";
+        }
+
+        if (tile.HillLevel is >= 2)
+        {
+            return "Level 2+ hill target: +1 to-hit modifier; high hills can block LOS";
+        }
+
+        return "Elevation may block LOS if intervening hex is 1+ level above attacker/target";
+    }
+
+    private static string? GetTileBottomLabel(HexTile tile) =>
+        tile.HillLevel is int hillLevel
+            ? $"Level {hillLevel}"
+            : tile.WaterDepth is int waterDepth
+                ? $"Depth {waterDepth}"
+                : null;
 
     private HexDecal? GetTileDecal(HexTile tile)
     {

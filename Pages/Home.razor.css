@@ -1,14 +1,72 @@
+.battlefield-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 23rem;
+    gap: 1rem;
+    align-items: start;
+}
+
+.map-column {
+    min-width: 0;
+}
+
+.map-meta {
+    margin-bottom: 0.5rem;
+    color: #3a3f4a;
+}
+
+.control-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    max-height: calc(100vh - 6rem);
+    overflow-y: auto;
+    padding-right: 0.2rem;
+}
+
+.panel-card {
+    background: #ffffff;
+    border: 1px solid #d6dce5;
+    border-radius: 0.65rem;
+    padding: 0.7rem;
+}
+
+.panel-card h3 {
+    margin: 0 0 0.55rem 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #2e3a4a;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.mission-control-text {
+    margin: 0;
+    font-size: 0.82rem;
+    color: #4a5668;
+    line-height: 1.35;
+}
+
 .controls {
     display: grid;
-    grid-template-columns: repeat(4, minmax(10rem, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
 }
 
 .control-group {
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
+}
+
+.control-group label {
+    font-size: 0.8rem;
+    color: #4a5668;
+}
+
+.button-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .mode-controls {
@@ -18,9 +76,93 @@
     flex-wrap: wrap;
 }
 
+.turn-btn {
+    padding: 0.14rem 0.4rem;
+    font-size: 0.72rem;
+    line-height: 1.2;
+}
+
 .mode-label {
     font-weight: 600;
     color: #3a3f4a;
+}
+
+.status-block {
+    margin: 0;
+    white-space: pre-wrap;
+    font-size: 0.76rem;
+    line-height: 1.28;
+    color: #2b3340;
+    max-height: 11rem;
+    overflow: auto;
+    background: #f4f7fb;
+    border: 1px solid #d7e0eb;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+}
+
+.console-panel {
+    margin-top: auto;
+}
+
+.create-game-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9000;
+}
+
+.create-game-dialog {
+    width: min(42rem, 92vw);
+    background: #ffffff;
+    border: 1px solid #d7dfeb;
+    border-radius: 0.75rem;
+    padding: 1rem;
+    box-shadow: 0 16px 40px rgba(20, 32, 56, 0.28);
+}
+
+.create-game-dialog h2 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.2rem;
+    color: #2c3b50;
+}
+
+.create-game-validation {
+    margin: 0.6rem 0 0 0;
+    color: #b42318;
+    font-size: 0.82rem;
+}
+
+.spawn-preview {
+    margin: 0.45rem 0 0 0;
+    color: #475467;
+    font-size: 0.8rem;
+}
+
+.popup-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.matrix-console {
+    background: #040b04;
+    border: 1px solid #1d451d;
+    border-radius: 0.45rem;
+    padding: 0.45rem;
+    min-height: 8rem;
+    max-height: 14rem;
+    overflow-y: auto;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 0.72rem;
+    line-height: 1.25;
+    color: #49e349;
+}
+
+.matrix-console div {
+    white-space: pre-wrap;
+    margin-bottom: 0.2rem;
 }
 
 
@@ -44,14 +186,6 @@
     margin-top: 0.7rem;
     color: #3a3f4a;
     font-weight: 600;
-}
-
-.combat-status {
-    margin-top: 0.6rem;
-    display: flex;
-    gap: 0.9rem;
-    flex-wrap: wrap;
-    color: #2f3540;
 }
 
 .game-over-overlay {
@@ -115,9 +249,9 @@
 }
 
 .control-hint {
-    margin-top: 0.35rem;
+    margin-top: 0.5rem;
     color: #666;
-    font-size: 0.95rem;
+    font-size: 0.78rem;
 }
 
 .legend-item {
@@ -138,8 +272,12 @@
 }
 
 @media (max-width: 900px) {
-    .controls {
-        grid-template-columns: repeat(2, minmax(10rem, 1fr));
+    .battlefield-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .control-panel {
+        max-height: none;
     }
 }
 
