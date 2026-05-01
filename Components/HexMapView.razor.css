@@ -118,11 +118,11 @@
 }
 
 .impact-text {
-    font-size: 4.8px;  /* Increased from 3.4px for better visibility */
+    font-size: 8.6px;
     font-weight: 800;
-    letter-spacing: 0.2px;
+    letter-spacing: 0.3px;
     paint-order: stroke;
-    stroke-width: 0.8px;  /* Slightly thicker stroke for bigger text */
+    stroke-width: 1.2px;
     animation: impactPop 0.3s ease-out;
 }
 
@@ -137,12 +137,12 @@
 }
 
 .impact-destruction {
-    fill: #ff2c2c;  /* Brighter red for destruction messages */
-    stroke: #7d0000;  /* Darker red stroke for destruction */
+    fill: #ff2c2c;
+    stroke: #7d0000;
 }
 
 .impact-damage {
-    font-size: 3.5px;  /* Increased from 2.55px to match larger impact-text */
+    font-size: 6.3px;
     fill: #ffd0d0;
     stroke: #361111;
     stroke-width: 0.55px;  /* Adjusted for larger size */

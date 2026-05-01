@@ -89,7 +89,7 @@
 			<div class="matrix-console">
 				@foreach (var line in CombatLog)
 				{
-					<div>@line</div>
+					<div class="@GetLogCssClass(line)">@line</div>
 				}
 			</div>
 		</section>
@@ -178,6 +178,8 @@
 	private int RoundNumber { get; set; } = 1;
 	private bool IsPlayerPhase { get; set; } = true;
 	private readonly List<string> CombatLog = new();
+
+	private enum LogEntryType { Normal, Hit, Miss, Destruction }
 	private string _lastActionMessage = string.Empty;
 	private string LastActionMessage
 	{
@@ -779,10 +781,12 @@
 		HasPlayerFiredThisTurn = true;
 		AddPlayerHeat(WeaponHeat);
 
+		var modBreakdown = FormatModifierBreakdown(BaseToHit, rangeModifier, attackerModifier, targetModifier, heatModifier, gyroModifier, terrainFiringModifier);
+
 		if (roll < targetNumber)
 		{
 			await PlayShotAnimation(attackerIsPlayer: true, targetIsPlayer: false, hit: false, damage: 0);
-			LastActionMessage = $"You fire at range {range}: rolled {roll} vs TN {targetNumber}. Miss.";
+			LastActionMessage = $"MISS — rolled {roll} vs TN {targetNumber} ({modBreakdown}).";
 			return;
 		}
 
@@ -796,14 +800,14 @@
 		}
 		await PlayShotAnimation(attackerIsPlayer: true, targetIsPlayer: false, hit: true, damage: armorDamage + internalDamage);
 		RecalculateDurabilityTotals();
-		LastActionMessage = $"Hit! Rolled {roll} vs TN {targetNumber}. {enemyArc} arc -> {FormatLocation(hitLocation)} for {armorDamage}A/{internalDamage}I.";
+		LastActionMessage = $"HIT — rolled {roll} vs TN {targetNumber} ({modBreakdown}). {enemyArc} arc → {FormatLocation(hitLocation)}: {armorDamage} armor / {internalDamage} internal.";
 		if (!string.IsNullOrWhiteSpace(criticalHitMsg))
 		{
 			LastActionMessage += $" {criticalHitMsg}";
 		}
 		if (transferredToCt > 0)
 		{
-			LastActionMessage += $" {transferredToCt} transferred to center torso.";
+			LastActionMessage += $" +{transferredToCt} overflow to Center Torso.";
 		}
 
 		if (EnemyInternal <= 0)
@@ -935,7 +939,8 @@
 				};
 				EnemyHeat += 1;
 				actions.Add("rotate");
-				await AnimateAiStep(250);
+				EnemyMech = enemy;  // Update UI immediately so each rotate is visible
+				await AnimateAiStep(300);
 				continue;
 			}
 
@@ -963,11 +968,18 @@
 			movedHexes++;
 			EnemyHeat += GetMovementHeat(MovementMode.Walk);
 			actions.Add("move");
-			await AnimateAiStep(260);
+			EnemyMech = enemy;  // Update UI immediately so each hex step is visible
+			await AnimateAiStep(350);
 		}
 
 		EnemyMech = enemy;
 		EnemyHexesMovedLastTurn = movedHexes;
+
+		// Pause briefly after movement completes, before firing
+		if (actions.Count > 0)
+		{
+			await AnimateAiStep(400);
+		}
 
 		var enemyArc = GetFrontArcTiles(enemy, 4);
 		if (enemyArc.Contains((UserMech.Column, UserMech.Row)) && PlayerInternal > 0 && !IsArmDestroyed(EnemySections))  // BATTLETECHCOMPLIANCE: Enemy can't fire if arms destroyed
@@ -980,39 +992,42 @@
 				{
 					actions.Add(enemyLosBlockedMessage);
 				}
-				else
+			else
+			{
+			EnemyHeat += WeaponHeat;
+			var heatModifier = GetHeatToHitModifier(EnemyHeat);
+			var enemyGyroModifier = IsComponentDestroyed(EnemyComponents, ComponentType.Gyro) ? 2 : 0;
+			var enemyAttackerModifier = GetAttackerMovementModifier(MovementMode.Walk);
+			var playerTargetModifier = GetTargetMovementModifier(PlayerHexesMovedThisTurn);
+			var targetNumber = BaseToHit + rangeModifier + enemyAttackerModifier + playerTargetModifier + heatModifier + enemyGyroModifier + enemyTerrainModifier;
+			var roll = Roll2d6();
+			var modBreakdown = FormatModifierBreakdown(BaseToHit, rangeModifier, enemyAttackerModifier, playerTargetModifier, heatModifier, enemyGyroModifier, enemyTerrainModifier);
+			if (roll >= targetNumber)
+			{
+				var incomingArc = GetIncomingArc(UserMech.Facing, UserMech.Column, UserMech.Row, enemy.Column, enemy.Row);
+				var hitLocation = RollHitLocation(incomingArc, Roll2d6());
+				ApplyDamage(PlayerSections, hitLocation, WeaponDamage, out var armorDamage, out var internalDamage, out _);
+				var critMsg = string.Empty;
+				if (internalDamage > 0)
 				{
-				EnemyHeat += WeaponHeat;
-				var heatModifier = GetHeatToHitModifier(EnemyHeat);
-				var enemyGyroModifier = IsComponentDestroyed(EnemyComponents, ComponentType.Gyro) ? 2 : 0;
-				var targetNumber = BaseToHit + rangeModifier + GetAttackerMovementModifier(MovementMode.Walk) + GetTargetMovementModifier(PlayerHexesMovedThisTurn) + heatModifier + enemyGyroModifier + enemyTerrainModifier;
-				var roll = Roll2d6();
-				if (roll >= targetNumber)
+					critMsg = RollCriticalHit(PlayerComponents, hitLocation);
+				}
+				await PlayShotAnimation(attackerIsPlayer: false, targetIsPlayer: true, hit: true, damage: armorDamage + internalDamage);
+				RecalculateDurabilityTotals();
+				actions.Add($"hit ({roll}/{targetNumber})");
+				LastEnemyAttackMessage = $"Enemy HIT — rolled {roll} vs TN {targetNumber} ({modBreakdown}). {incomingArc} arc → {FormatLocation(hitLocation)}: {armorDamage} armor / {internalDamage} internal.";
+				if (!string.IsNullOrWhiteSpace(critMsg))
 				{
-					var incomingArc = GetIncomingArc(UserMech.Facing, UserMech.Column, UserMech.Row, enemy.Column, enemy.Row);
-					var hitLocation = RollHitLocation(incomingArc, Roll2d6());
-					ApplyDamage(PlayerSections, hitLocation, WeaponDamage, out var armorDamage, out var internalDamage, out _);
-					var critMsg = string.Empty;
-					if (internalDamage > 0)
-					{
-						critMsg = RollCriticalHit(PlayerComponents, hitLocation);
-					}
-					await PlayShotAnimation(attackerIsPlayer: false, targetIsPlayer: true, hit: true, damage: armorDamage + internalDamage);
-					RecalculateDurabilityTotals();
-					actions.Add($"hit ({roll}/{targetNumber}, {FormatLocation(hitLocation)} {armorDamage}A {internalDamage}I)");
-					LastEnemyAttackMessage = $"Enemy hit your {FormatLocation(hitLocation)}.";
-					if (!string.IsNullOrWhiteSpace(critMsg))
-					{
-						LastEnemyAttackMessage += $" {critMsg}";
-					}
+					LastEnemyAttackMessage += $" {critMsg}";
 				}
-				else
-				{
-					await PlayShotAnimation(attackerIsPlayer: false, targetIsPlayer: true, hit: false, damage: 0);
-					actions.Add($"miss ({roll}/{targetNumber})");
-					LastEnemyAttackMessage = "Enemy fire missed.";
-				}
-				}
+			}
+			else
+			{
+				await PlayShotAnimation(attackerIsPlayer: false, targetIsPlayer: true, hit: false, damage: 0);
+				actions.Add($"miss ({roll}/{targetNumber})");
+				LastEnemyAttackMessage = $"Enemy MISS — rolled {roll} vs TN {targetNumber} ({modBreakdown}).";
+			}
+			}
 			}
 		}
 
@@ -1721,17 +1736,56 @@
 			return;
 		}
 
-		if (CombatLog.Count > 0 && CombatLog[^1] == line)
+		var type = ClassifyLogLine(line);
+		var entry = $"> {line}";
+
+		// Insert at top so newest messages appear first
+		if (CombatLog.Count > 0 && CombatLog[0] == entry)
 		{
 			return;
 		}
 
-		CombatLog.Add($"> {line}");
+		CombatLog.Insert(0, entry);
 		if (CombatLog.Count > 120)
 		{
-			CombatLog.RemoveAt(0);
+			CombatLog.RemoveAt(CombatLog.Count - 1);
 		}
 	}
+
+	private static LogEntryType ClassifyLogLine(string line)
+	{
+		// Destruction: any Critical or section/mech destroyed message
+		if (line.Contains("CRITICAL", StringComparison.OrdinalIgnoreCase) ||
+			line.Contains("destroyed", StringComparison.OrdinalIgnoreCase) ||
+			line.Contains("explosion", StringComparison.OrdinalIgnoreCase))
+		{
+			return LogEntryType.Destruction;
+		}
+
+		// Hit messages
+		if (line.StartsWith("HIT", StringComparison.OrdinalIgnoreCase) ||
+			line.StartsWith("Enemy HIT", StringComparison.OrdinalIgnoreCase))
+		{
+			return LogEntryType.Hit;
+		}
+
+		// Miss messages
+		if (line.StartsWith("MISS", StringComparison.OrdinalIgnoreCase) ||
+			line.StartsWith("Enemy MISS", StringComparison.OrdinalIgnoreCase))
+		{
+			return LogEntryType.Miss;
+		}
+
+		return LogEntryType.Normal;
+	}
+
+	private static string GetLogCssClass(string line) => ClassifyLogLine(line) switch
+	{
+		LogEntryType.Hit         => "log-hit",
+		LogEntryType.Miss        => "log-miss",
+		LogEntryType.Destruction => "log-destruction",
+		_                        => string.Empty
+	};
 
 	private static int GetArmorByClass(MechClass mechClass) => mechClass switch
 	{
@@ -1781,6 +1835,22 @@
 		<= 6 => 3,
 		_ => 4
 	};
+
+	/// <summary>
+	/// Builds a human-readable breakdown of all to-hit modifiers for the console log.
+	/// Only includes non-zero modifiers so the output stays concise.
+	/// </summary>
+	private static string FormatModifierBreakdown(int baseTn, int range, int attackerMove, int targetMove, int heat, int gyro, int terrain)
+	{
+		var parts = new List<string> { $"base {baseTn}" };
+		if (range != 0)        parts.Add($"range {range:+#;-#;0}");
+		if (attackerMove != 0) parts.Add($"attacker move {attackerMove:+#;-#;0}");
+		if (targetMove != 0)   parts.Add($"target move {targetMove:+#;-#;0}");
+		if (heat != 0)         parts.Add($"heat {heat:+#;-#;0}");
+		if (gyro != 0)         parts.Add($"gyro {gyro:+#;-#;0}");
+		if (terrain != 0)      parts.Add($"cover {terrain:+#;-#;0}");
+		return string.Join(", ", parts);
+	}
 
 	private static int Roll2d6() => Random.Shared.Next(1, 7) + Random.Shared.Next(1, 7);
 

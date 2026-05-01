@@ -196,6 +196,24 @@
     margin-bottom: 0.2rem;
 }
 
+.matrix-console .log-hit {
+    color: #ff5a5a;
+}
+
+.matrix-console .log-miss {
+    color: #888888;
+}
+
+.matrix-console .log-destruction {
+    color: #ff2c2c;
+    animation: logDestructionFlash 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes logDestructionFlash {
+    from { color: #ff2c2c; }
+    to   { color: #ff9090; }
+}
+
 
 .legend {
     margin-top: 1rem;
