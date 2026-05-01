@@ -1,0 +1,1501 @@
+﻿@page "/"
+@using MechWar.Components
+@using MechWar.Data
+@using MechWar.Models
+@using MechWar.Services
+@using Microsoft.AspNetCore.Components.Web
+@inject IMapGenerator MapGenerator
+
+<PageTitle>MechWar Map Generator</PageTitle>
+
+<h1>MechWar Battlefield Generator</h1>
+<p>Generate linked hex terrain for Battletech-inspired battlefields.</p>
+
+<div class="controls">
+	<div class="control-group">
+		<label for="theme">Theme</label>
+		<select id="theme" class="form-select" @bind="SelectedThemeKey">
+			@foreach (var theme in ThemeCatalog.All)
+			{
+				<option value="@theme.Key">@theme.DisplayName</option>
+			}
+		</select>
+	</div>
+
+	<div class="control-group">
+		<label for="width">Width</label>
+		<input id="width" class="form-control" type="number" min="8" max="80" @bind="Width" />
+	</div>
+
+	<div class="control-group">
+		<label for="height">Height</label>
+		<input id="height" class="form-control" type="number" min="8" max="60" @bind="Height" />
+	</div>
+
+	<div class="control-group">
+		<label for="mechClass">Mech Class</label>
+		<select id="mechClass" class="form-select" @bind="SelectedMechClass">
+			<option value="@MechClass.Light">Light</option>
+			<option value="@MechClass.Medium">Medium</option>
+			<option value="@MechClass.Heavy">Heavy</option>
+		</select>
+	</div>
+
+</div>
+
+<div class="mb-3">
+	<button class="btn btn-primary" @onclick="GenerateMap">Generate Map</button>
+	<button class="btn btn-outline-primary ms-2" @onclick="DeployUserMech">Deploy Mech</button>
+	<button class="btn btn-danger ms-2" @onclick="ResolvePlayerAttack" disabled="@(UserMech is null || EnemyMech is null || !IsPlayerPhase || !CanPlayerFire)">Fire (F)</button>
+	<button class="btn btn-outline-secondary ms-2" @onclick="EndPlayerTurn" disabled="@(UserMech is null || !IsPlayerPhase)">End Turn</button>
+</div>
+
+<div class="mode-controls mb-3">
+	<span class="mode-label">Movement Mode:</span>
+	<button class="btn btn-sm @GetModeButtonClass(MovementMode.Walk)" @onclick="() => TrySetMovementMode(MovementMode.Walk)">Walk (1/W)</button>
+	<button class="btn btn-sm @GetModeButtonClass(MovementMode.Run)" @onclick="() => TrySetMovementMode(MovementMode.Run)">Run (2/R)</button>
+	<button class="btn btn-sm @GetModeButtonClass(MovementMode.Jump)" @onclick="() => TrySetMovementMode(MovementMode.Jump)">Jump (3/J)</button>
+</div>
+
+@if (CurrentMap is not null)
+{
+	<p>
+		Theme: <strong>@CurrentMap.Theme.DisplayName</strong>
+		| Size: <strong>@CurrentMap.Width x @CurrentMap.Height</strong>
+		@if (UserMech is not null)
+		{
+			<span>
+				| Round: <strong>@RoundNumber</strong>
+				| Phase: <strong>@(IsPlayerPhase ? "Player" : "Enemy")</strong>
+				| Mech: <strong>@UserMech.Class</strong>
+				| Facing: <strong>@UserMech.Facing</strong>
+				| Mode: <strong>@ActiveMovementMode</strong>
+				| Movement: <strong>@UserMech.RemainingMovement/@UserMech.MaxMovement</strong>
+			</span>
+		}
+	</p>
+}
+
+<div class="battlefield-input"
+	 tabindex="0"
+	 @ref="BattlefieldInputRef"
+	 @onclick="FocusBattlefield"
+	 @onkeydown="HandleBattlefieldKey"
+	 @onkeydown:preventDefault="true">
+	<HexMapView
+		Map="CurrentMap"
+		Mech="UserMech"
+		EnemyMech="EnemyMech"
+		PlayerArcTiles="PlayerFiringArcTiles"
+		PlayerMechTooltip="@BuildPlayerMechTooltip()"
+		EnemyMechTooltip="@BuildEnemyMechTooltip()" />
+</div>
+
+@if (IsGameOver)
+{
+	<div class="game-over-overlay">
+		<div class="game-over-content">
+			<h1 class="game-over-text">GAME OVER</h1>
+			<p class="game-result @(PlayerWon ? "win" : "lose")">
+				@(PlayerWon ? "You win!" : "You lose!")
+			</p>
+			<button class="btn btn-primary btn-lg mt-4" @onclick="StartNewGame">
+				New Game
+			</button>
+		</div>
+	</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(LastActionMessage))
+{
+	<p class="turn-message">@LastActionMessage</p>
+}
+
+@if (UserMech is not null && EnemyMech is not null)
+{
+	<div class="combat-status">
+		<span><strong>Player Armor/Internal:</strong> @PlayerArmor / @PlayerInternal</span>
+		<span><strong>Enemy Armor/Internal:</strong> @EnemyArmor / @EnemyInternal</span>
+		<span><strong>Player Heat:</strong> @PlayerHeat (@(PlayerShutdown ? "Shutdown" : "Online"))</span>
+		<span><strong>Enemy Heat:</strong> @EnemyHeat (@(EnemyShutdown ? "Shutdown" : "Online"))</span>
+		<span><strong>Ammo:</strong> P @(PlayerAmmoIntact ? "Safe" : "Exploded") | E @(EnemyAmmoIntact ? "Safe" : "Exploded")</span>
+		<span><strong>Dmg:</strong> 
+			Player @GetComponentSummary(PlayerComponents) | 
+			Enemy @GetComponentSummary(EnemyComponents)</span>
+		<span><strong>To-Hit:</strong> @GetPlayerToHitDisplay()</span>
+	</div>
+}
+
+<p class="control-hint">Click the map area and use arrow keys: Left/Right rotate, Up forward, Down backward. Switch mode with 1/2/3 or W/R/J, and fire with F or Space.</p>
+
+@if (CurrentMap is not null)
+{
+	<div class="legend">
+		@foreach (var terrain in CurrentMap.Tiles.Select(tile => tile.Terrain).Distinct().OrderBy(t => t.ToString()))
+		{
+			<span class="legend-item">
+				<span class="legend-swatch" style="background-color:@TerrainCatalog.GetColor(terrain)"></span>
+				@TerrainCatalog.GetLabel(terrain)
+			</span>
+		}
+	</div>
+}
+
+@code {
+	private readonly HashSet<(int Column, int Row)> PlayerFiringArcTiles = new();
+	private readonly Dictionary<(int Column, int Row), TerrainType> TerrainByCoordinate = new();
+	private readonly Dictionary<HitLocation, SectionState> PlayerSections = new();
+	private readonly Dictionary<HitLocation, SectionState> EnemySections = new();
+	private readonly Dictionary<HitLocation, List<ComponentStatus>> PlayerComponents = new();
+	private readonly Dictionary<HitLocation, List<ComponentStatus>> EnemyComponents = new();
+
+	private string SelectedThemeKey { get; set; } = ThemeCatalog.All[0].Key;
+	private int Width { get; set; } = 28;
+	private int Height { get; set; } = 20;
+	private MechClass SelectedMechClass { get; set; } = MechClass.Medium;
+	private MovementMode ActiveMovementMode { get; set; } = MovementMode.Walk;
+	private int CurrentSeed { get; set; } = Random.Shared.Next(100_000, 999_999);
+	private HexMap? CurrentMap { get; set; }
+	private PlayerMech? UserMech { get; set; }
+	private PlayerMech? EnemyMech { get; set; }
+	private ElementReference BattlefieldInputRef { get; set; }
+	private int RoundNumber { get; set; } = 1;
+	private bool IsPlayerPhase { get; set; } = true;
+	private string LastActionMessage { get; set; } = string.Empty;
+	private int PlayerArmor { get; set; }
+	private int PlayerInternal { get; set; }
+	private int EnemyArmor { get; set; }
+	private int EnemyInternal { get; set; }
+	private int PlayerHexesMovedThisTurn { get; set; }
+	private int EnemyHexesMovedLastTurn { get; set; }
+	private bool HasPlayerFiredThisTurn { get; set; }
+	private int PlayerHeat { get; set; }
+	private int EnemyHeat { get; set; }
+	private bool PlayerShutdown { get; set; }
+	private bool EnemyShutdown { get; set; }
+	private bool PlayerAmmoIntact { get; set; } = true;
+	private bool EnemyAmmoIntact { get; set; } = true;
+	private string LastEnemyAttackMessage { get; set; } = string.Empty;
+	private bool IsGameOver { get; set; }
+	private bool PlayerWon { get; set; }
+
+	private const int BaseToHit = 4;
+	private const int MaxWeaponRange = 9;
+	private const int WeaponDamage = 5;
+	private const int WeaponHeat = 4;
+	private const int HeatSinkValue = 6;
+	private const int CriticalHitThreshold = 10;
+
+	private readonly record struct ComponentStatus(ComponentType Type, bool IsDestroyed);
+
+	private enum HitLocation
+	{
+		Head,
+		CenterTorso,
+		LeftTorso,
+		RightTorso,
+		LeftArm,
+		RightArm,
+		LeftLeg,
+		RightLeg
+	}
+
+	private enum AttackArc
+	{
+		Front,
+		LeftSide,
+		RightSide,
+		Rear
+	}
+
+	private enum ComponentType
+	{
+		Engine,
+		Gyro,
+		Weapon,
+		JumpJet
+	}
+
+	private readonly record struct SectionState(int Armor, int Internal);
+
+	protected override void OnInitialized()
+	{
+		GenerateMap();
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender)
+		{
+			await FocusBattlefield();
+		}
+	}
+
+	private void GenerateMap()
+	{
+		var theme = ThemeCatalog.Get(SelectedThemeKey);
+		CurrentSeed = Random.Shared.Next(int.MinValue, int.MaxValue);
+		CurrentMap = MapGenerator.Generate(theme, Width, Height, CurrentSeed);
+		BuildTerrainIndex();
+		DeployUserMech();
+	}
+
+	private void BuildTerrainIndex()
+	{
+		TerrainByCoordinate.Clear();
+
+		if (CurrentMap is null)
+		{
+			return;
+		}
+
+		foreach (var tile in CurrentMap.Tiles)
+		{
+			TerrainByCoordinate[(tile.Column, tile.Row)] = tile.Terrain;
+		}
+	}
+
+	private void DeployUserMech()
+	{
+		if (CurrentMap is null)
+		{
+			return;
+		}
+
+		var playerSpawn = FindSpawnTile();
+		var playerMovement = GetMovementByClassAndMode(SelectedMechClass, ActiveMovementMode);
+		UserMech = new PlayerMech(SelectedMechClass, playerSpawn.Column, playerSpawn.Row, HexDirection.East, playerMovement, playerMovement);
+
+		var enemySpawn = FindEnemySpawnTile(playerSpawn);
+		EnemyMech = new PlayerMech(MechClass.Medium, enemySpawn.Column, enemySpawn.Row, HexDirection.West, 0, 0);
+
+		RoundNumber = 1;
+		IsPlayerPhase = true;
+		InitializeSections(PlayerSections, SelectedMechClass);
+		InitializeSections(EnemySections, EnemyMech.Class);
+		InitializeComponents(PlayerComponents);
+		InitializeComponents(EnemyComponents);
+		RecalculateDurabilityTotals();
+		PlayerHexesMovedThisTurn = 0;
+		EnemyHexesMovedLastTurn = 0;
+		HasPlayerFiredThisTurn = false;
+		PlayerHeat = 0;
+		EnemyHeat = 0;
+		PlayerShutdown = false;
+		EnemyShutdown = false;
+		PlayerAmmoIntact = true;
+		EnemyAmmoIntact = true;
+		LastEnemyAttackMessage = string.Empty;
+		UpdatePlayerFiringArc();
+		LastActionMessage = $"{SelectedMechClass} mech deployed. Round 1 starts in {ActiveMovementMode} mode.";
+	}
+
+	private (int Column, int Row) FindSpawnTile()
+	{
+		if (CurrentMap is null)
+		{
+			return (0, 0);
+		}
+
+		var centerColumn = CurrentMap.Width / 2;
+		var centerRow = CurrentMap.Height / 2;
+		var maxRadius = Math.Max(CurrentMap.Width, CurrentMap.Height);
+
+		for (var radius = 0; radius <= maxRadius; radius++)
+		{
+			for (var row = Math.Max(0, centerRow - radius); row <= Math.Min(CurrentMap.Height - 1, centerRow + radius); row++)
+			{
+				for (var column = Math.Max(0, centerColumn - radius); column <= Math.Min(CurrentMap.Width - 1, centerColumn + radius); column++)
+				{
+					if (IsTraversable(column, row))
+					{
+						return (column, row);
+					}
+				}
+			}
+		}
+
+		return (0, 0);
+	}
+
+	private (int Column, int Row) FindEnemySpawnTile((int Column, int Row) playerSpawn)
+	{
+		if (CurrentMap is null)
+		{
+			return (0, 0);
+		}
+
+		var best = (Column: 0, Row: 0);
+		var bestDistance = -1;
+
+		foreach (var tile in CurrentMap.Tiles)
+		{
+			if (!IsTraversable(tile.Column, tile.Row))
+			{
+				continue;
+			}
+
+			var distance = CubeDistance(playerSpawn.Column, playerSpawn.Row, tile.Column, tile.Row);
+			if (distance > bestDistance)
+			{
+				best = (tile.Column, tile.Row);
+				bestDistance = distance;
+			}
+		}
+
+		return best;
+	}
+
+	private async Task FocusBattlefield()
+	{
+		await BattlefieldInputRef.FocusAsync();
+	}
+
+	private void HandleBattlefieldKey(KeyboardEventArgs args)
+	{
+		if (UserMech is null)
+		{
+			return;
+		}
+
+		switch (args.Key)
+		{
+			case "1":
+			case "Numpad1":
+			case "w":
+			case "W":
+				TrySetMovementMode(MovementMode.Walk);
+				return;
+			case "2":
+			case "Numpad2":
+			case "r":
+			case "R":
+				TrySetMovementMode(MovementMode.Run);
+				return;
+			case "3":
+			case "Numpad3":
+			case "j":
+			case "J":
+				TrySetMovementMode(MovementMode.Jump);
+				return;
+			case "f":
+			case "F":
+			case " ":
+				ResolvePlayerAttack();
+				return;
+		}
+
+		if (!IsPlayerPhase)
+		{
+			LastActionMessage = "Wait for enemy phase to finish.";
+			return;
+		}
+
+		if (PlayerShutdown)
+		{
+			LastActionMessage = "Your mech is shutdown. End turn to attempt restart.";
+			return;
+		}
+
+		if (PlayerInternal <= 0 || EnemyInternal <= 0)
+		{
+			LastActionMessage = "Combat is over. Deploy a new mech to continue.";
+			return;
+		}
+
+		switch (args.Key)
+		{
+			case "ArrowLeft":
+				TryRotate(1);
+				break;
+			case "ArrowRight":
+				TryRotate(-1);
+				break;
+			case "ArrowUp":
+				TryMove(true);
+				break;
+			case "ArrowDown":
+				TryMove(false);
+				break;
+		}
+	}
+
+	private void TrySetMovementMode(MovementMode mode)
+	{
+		if (UserMech is null)
+		{
+			return;
+		}
+
+		if (ActiveMovementMode == mode)
+		{
+			return;
+		}
+
+		if (UserMech.RemainingMovement != UserMech.MaxMovement)
+		{
+			LastActionMessage = "You can only change movement mode before spending movement this turn.";
+			return;
+		}
+
+		ActiveMovementMode = mode;
+		var resetMovement = GetMovementByClassAndMode(UserMech.Class, ActiveMovementMode);
+		UserMech = UserMech with { RemainingMovement = resetMovement, MaxMovement = resetMovement };
+		LastActionMessage = $"Movement mode set to {ActiveMovementMode}.";
+	}
+
+	private string GetModeButtonClass(MovementMode mode)
+	{
+		if (mode == ActiveMovementMode)
+		{
+			return "btn-primary";
+		}
+
+		return "btn-outline-primary";
+	}
+
+	private void TryRotate(int directionDelta)
+	{
+		if (UserMech is null)
+		{
+			return;
+		}
+
+		if (UserMech.RemainingMovement <= 0)
+		{
+			LastActionMessage = "No movement left this turn. End turn to continue.";
+			return;
+		}
+
+		var nextFacing = NormalizeDirection((int)UserMech.Facing + directionDelta);
+		UserMech = UserMech with
+		{
+			Facing = nextFacing,
+			RemainingMovement = UserMech.RemainingMovement - 1
+		};
+		AddPlayerHeat(1);
+		UpdatePlayerFiringArc();
+		LastActionMessage = $"Rotated {GetTurnLabel(directionDelta)} to {UserMech.Facing}.";
+	}
+
+	private void TryMove(bool forward)
+	{
+		if (UserMech is null || CurrentMap is null)
+		{
+			return;
+		}
+
+		var heading = forward ? UserMech.Facing : NormalizeDirection((int)UserMech.Facing + 3);
+		var destination = Step(UserMech.Column, UserMech.Row, heading);
+
+		if (!IsWithinMap(destination.Column, destination.Row))
+		{
+			LastActionMessage = "Cannot move outside the map.";
+			return;
+		}
+
+		if (EnemyMech is not null && destination.Column == EnemyMech.Column && destination.Row == EnemyMech.Row)
+		{
+			LastActionMessage = "Destination occupied by enemy mech.";
+			return;
+		}
+
+		if (!TerrainByCoordinate.TryGetValue((destination.Column, destination.Row), out var terrain))
+		{
+			LastActionMessage = "Destination terrain could not be resolved.";
+			return;
+		}
+
+		var moveCost = GetMoveCost(terrain, forward, ActiveMovementMode);
+		if (moveCost >= 99)
+		{
+			LastActionMessage = $"{TerrainCatalog.GetLabel(terrain)} is impassable in {ActiveMovementMode} mode.";
+			return;
+		}
+
+		if (UserMech.RemainingMovement < moveCost)
+		{
+			LastActionMessage = $"Need {moveCost} movement, only {UserMech.RemainingMovement} remaining.";
+			return;
+		}
+
+		UserMech = UserMech with
+		{
+			Column = destination.Column,
+			Row = destination.Row,
+			RemainingMovement = UserMech.RemainingMovement - moveCost
+		};
+		PlayerHexesMovedThisTurn++;
+		AddPlayerHeat(GetMovementHeat(ActiveMovementMode));
+
+		UpdatePlayerFiringArc();
+		var movementKind = forward ? "forward" : "backward";
+		LastActionMessage = $"Moved {movementKind} in {ActiveMovementMode} mode into {TerrainCatalog.GetLabel(terrain)} ({moveCost} MP).";
+	}
+
+	private bool CanPlayerFire =>
+		UserMech is not null &&
+		EnemyMech is not null &&
+		!HasPlayerFiredThisTurn &&
+		!PlayerShutdown &&
+		PlayerInternal > 0 &&
+		!IsComponentDestroyed(PlayerComponents, ComponentType.Weapon) &&
+		EnemyInternal > 0;
+
+	private void ResolvePlayerAttack()
+	{
+		if (!IsPlayerPhase || !CanPlayerFire || UserMech is null || EnemyMech is null)
+		{
+			return;
+		}
+
+		if (!PlayerFiringArcTiles.Contains((EnemyMech.Column, EnemyMech.Row)))
+		{
+			LastActionMessage = "Enemy is outside your front firing arc.";
+			return;
+		}
+
+		var range = CubeDistance(UserMech.Column, UserMech.Row, EnemyMech.Column, EnemyMech.Row);
+		var rangeModifier = GetRangeModifier(range);
+		if (rangeModifier >= 99)
+		{
+			LastActionMessage = "Enemy is out of weapon range.";
+			return;
+		}
+
+		var attackerModifier = GetAttackerMovementModifier(ActiveMovementMode);
+		var targetModifier = GetTargetMovementModifier(EnemyHexesMovedLastTurn);
+		var heatModifier = GetHeatToHitModifier(PlayerHeat);
+		var gyroModifier = IsComponentDestroyed(PlayerComponents, ComponentType.Gyro) ? 2 : 0;
+		var targetNumber = BaseToHit + rangeModifier + attackerModifier + targetModifier + heatModifier + gyroModifier;
+		var roll = Roll2d6();
+
+		HasPlayerFiredThisTurn = true;
+		AddPlayerHeat(WeaponHeat);
+
+		if (roll < targetNumber)
+		{
+			LastActionMessage = $"You fire at range {range}: rolled {roll} vs TN {targetNumber}. Miss.";
+			return;
+		}
+
+		var enemyArc = GetIncomingArc(EnemyMech.Facing, EnemyMech.Column, EnemyMech.Row, UserMech.Column, UserMech.Row);
+		var hitLocation = RollHitLocation(enemyArc, Roll2d6());
+		ApplyDamage(EnemySections, hitLocation, WeaponDamage, out var armorDamage, out var internalDamage, out var transferredToCt);
+		var criticalHitMsg = string.Empty;
+		if (internalDamage > 0)
+		{
+			criticalHitMsg = RollCriticalHit(EnemyComponents, hitLocation);
+		}
+		RecalculateDurabilityTotals();
+		LastActionMessage = $"Hit! Rolled {roll} vs TN {targetNumber}. {enemyArc} arc -> {FormatLocation(hitLocation)} for {armorDamage}A/{internalDamage}I.";
+		if (!string.IsNullOrWhiteSpace(criticalHitMsg))
+		{
+			LastActionMessage += $" {criticalHitMsg}";
+		}
+		if (transferredToCt > 0)
+		{
+			LastActionMessage += $" {transferredToCt} transferred to center torso.";
+		}
+
+		if (EnemyInternal <= 0)
+		{
+			LastActionMessage += " Enemy mech destroyed.";
+		}
+		CheckGameOver();
+	}
+
+	private string GetPlayerToHitDisplay()
+	{
+		if (UserMech is null || EnemyMech is null)
+		{
+			return "N/A";
+		}
+
+		if (!PlayerFiringArcTiles.Contains((EnemyMech.Column, EnemyMech.Row)))
+		{
+			return "No shot (outside arc)";
+		}
+
+		var range = CubeDistance(UserMech.Column, UserMech.Row, EnemyMech.Column, EnemyMech.Row);
+		var rangeModifier = GetRangeModifier(range);
+		if (rangeModifier >= 99)
+		{
+			return "No shot (out of range)";
+		}
+
+		var attackerModifier = GetAttackerMovementModifier(ActiveMovementMode);
+		var targetModifier = GetTargetMovementModifier(EnemyHexesMovedLastTurn);
+		var heatModifier = GetHeatToHitModifier(PlayerHeat);
+		var gyroModifier = IsComponentDestroyed(PlayerComponents, ComponentType.Gyro) ? 2 : 0;
+		var targetNumber = BaseToHit + rangeModifier + attackerModifier + targetModifier + heatModifier + gyroModifier;
+		return $"{targetNumber}+ (base {BaseToHit} + range {rangeModifier} + move {attackerModifier} + target {targetModifier} + heat {heatModifier})";
+	}
+
+	private void EndPlayerTurn()
+	{
+		if (UserMech is null || EnemyMech is null)
+		{
+			return;
+		}
+
+		if (PlayerInternal <= 0 || EnemyInternal <= 0)
+		{
+			LastActionMessage = "Battle is already resolved. Deploy a new mech to restart.";
+			return;
+		}
+
+		ApplyHeatEndPhase(isPlayer: true);
+		if (PlayerInternal <= 0)
+		{
+			LastActionMessage = "Your mech has been destroyed by heat effects.";
+			return;
+		}
+
+		IsPlayerPhase = false;
+		var enemySummary = ExecuteEnemyTurn();
+		RoundNumber++;
+		IsPlayerPhase = true;
+
+		TryRecoverFromShutdown(isPlayer: true);
+		var refreshedMovement = PlayerShutdown ? 0 : GetMovementByClassAndMode(UserMech.Class, ActiveMovementMode);
+		if (IsComponentDestroyed(PlayerComponents, ComponentType.Engine))
+		{
+			refreshedMovement = Math.Max(1, refreshedMovement - 2);
+		}
+		UserMech = UserMech with { RemainingMovement = refreshedMovement, MaxMovement = refreshedMovement };
+		PlayerHexesMovedThisTurn = 0;
+		HasPlayerFiredThisTurn = false;
+		UpdatePlayerFiringArc();
+		LastActionMessage = $"Enemy turn: {enemySummary} Round {RoundNumber} begins. {(PlayerShutdown ? "Player remains shutdown." : $"{ActiveMovementMode} movement refreshed.")}";
+		if (!string.IsNullOrWhiteSpace(LastEnemyAttackMessage))
+		{
+			LastActionMessage += $" {LastEnemyAttackMessage}";
+		}
+	}
+
+	private string ExecuteEnemyTurn()
+	{
+		if (EnemyMech is null || UserMech is null)
+		{
+			return "no action";
+		}
+
+		if (PlayerInternal <= 0 || EnemyInternal <= 0)
+		{
+			return "combat ended";
+		}
+
+		var enemy = EnemyMech with
+		{
+			RemainingMovement = GetMovementByClassAndMode(EnemyMech.Class, MovementMode.Walk),
+			MaxMovement = GetMovementByClassAndMode(EnemyMech.Class, MovementMode.Walk)
+		};
+
+		LastEnemyAttackMessage = string.Empty;
+		if (EnemyShutdown)
+		{
+			TryRecoverFromShutdown(isPlayer: false);
+			if (EnemyShutdown)
+			{
+				ApplyHeatEndPhase(isPlayer: false);
+				return "shutdown";
+			}
+		}
+
+		var actions = new List<string>();
+		var safety = 0;
+		var movedHexes = 0;
+
+		while (enemy.RemainingMovement > 0 && safety < 20)
+		{
+			safety++;
+			var desiredFacing = GetDirectionToward(enemy.Column, enemy.Row, UserMech.Column, UserMech.Row);
+
+			if (desiredFacing is not null && desiredFacing.Value != enemy.Facing)
+			{
+				var turnDelta = GetShortestTurnDelta(enemy.Facing, desiredFacing.Value);
+				enemy = enemy with
+				{
+					Facing = NormalizeDirection((int)enemy.Facing + turnDelta),
+					RemainingMovement = enemy.RemainingMovement - 1
+				};
+				EnemyHeat += 1;
+				actions.Add("rotate");
+				continue;
+			}
+
+			var target = Step(enemy.Column, enemy.Row, enemy.Facing);
+			if (!IsWithinMap(target.Column, target.Row) ||
+				(target.Column == UserMech.Column && target.Row == UserMech.Row) ||
+				!TerrainByCoordinate.TryGetValue((target.Column, target.Row), out var terrain))
+			{
+				break;
+			}
+
+			var cost = GetMoveCost(terrain, true, MovementMode.Walk);
+			if (cost >= 99 || enemy.RemainingMovement < cost)
+			{
+				break;
+			}
+
+			enemy = enemy with
+			{
+				Column = target.Column,
+				Row = target.Row,
+				RemainingMovement = enemy.RemainingMovement - cost
+			};
+			movedHexes++;
+			EnemyHeat += GetMovementHeat(MovementMode.Walk);
+			actions.Add("move");
+		}
+
+		EnemyMech = enemy;
+		EnemyHexesMovedLastTurn = movedHexes;
+
+		var enemyArc = GetFrontArcTiles(enemy, 4);
+		if (enemyArc.Contains((UserMech.Column, UserMech.Row)) && PlayerInternal > 0)
+		{
+			var range = CubeDistance(enemy.Column, enemy.Row, UserMech.Column, UserMech.Row);
+			var rangeModifier = GetRangeModifier(range);
+			if (rangeModifier < 99)
+			{
+				EnemyHeat += WeaponHeat;
+				var heatModifier = GetHeatToHitModifier(EnemyHeat);
+				var enemyGyroModifier = IsComponentDestroyed(EnemyComponents, ComponentType.Gyro) ? 2 : 0;
+				var targetNumber = BaseToHit + rangeModifier + GetAttackerMovementModifier(MovementMode.Walk) + GetTargetMovementModifier(PlayerHexesMovedThisTurn) + heatModifier + enemyGyroModifier;
+				var roll = Roll2d6();
+				if (roll >= targetNumber)
+				{
+					var incomingArc = GetIncomingArc(UserMech.Facing, UserMech.Column, UserMech.Row, enemy.Column, enemy.Row);
+					var hitLocation = RollHitLocation(incomingArc, Roll2d6());
+					ApplyDamage(PlayerSections, hitLocation, WeaponDamage, out var armorDamage, out var internalDamage, out _);
+					var critMsg = string.Empty;
+					if (internalDamage > 0)
+					{
+						critMsg = RollCriticalHit(PlayerComponents, hitLocation);
+					}
+					RecalculateDurabilityTotals();
+					actions.Add($"hit ({roll}/{targetNumber}, {FormatLocation(hitLocation)} {armorDamage}A {internalDamage}I)");
+					LastEnemyAttackMessage = $"Enemy hit your {FormatLocation(hitLocation)}.";
+					if (!string.IsNullOrWhiteSpace(critMsg))
+					{
+						LastEnemyAttackMessage += $" {critMsg}";
+					}
+				}
+				else
+				{
+					actions.Add($"miss ({roll}/{targetNumber})");
+					LastEnemyAttackMessage = "Enemy fire missed.";
+				}
+			}
+		}
+
+		ApplyHeatEndPhase(isPlayer: false);
+
+		if (PlayerInternal <= 0)
+		{
+			actions.Add("player destroyed");
+			CheckGameOver();
+		}
+
+		return actions.Count == 0 ? "held position" : string.Join(", ", actions);
+	}
+
+	private void UpdatePlayerFiringArc()
+	{
+		PlayerFiringArcTiles.Clear();
+		if (UserMech is null)
+		{
+			return;
+		}
+
+		foreach (var tile in GetFrontArcTiles(UserMech, 4))
+		{
+			PlayerFiringArcTiles.Add(tile);
+		}
+	}
+
+	private HashSet<(int Column, int Row)> GetFrontArcTiles(PlayerMech mech, int range)
+	{
+		var arc = new HashSet<(int Column, int Row)>();
+
+		if (CurrentMap is null)
+		{
+			return arc;
+		}
+
+		foreach (var tile in CurrentMap.Tiles)
+		{
+			if (tile.Column == mech.Column && tile.Row == mech.Row)
+			{
+				continue;
+			}
+
+			var distance = CubeDistance(mech.Column, mech.Row, tile.Column, tile.Row);
+			if (distance == 0 || distance > range)
+			{
+				continue;
+			}
+
+			var bearing = GetDirectionToward(mech.Column, mech.Row, tile.Column, tile.Row);
+			if (bearing is null)
+			{
+				continue;
+			}
+
+			if (GetDirectionDistance(mech.Facing, bearing.Value) <= 1)
+			{
+				arc.Add((tile.Column, tile.Row));
+			}
+		}
+
+		return arc;
+	}
+
+	private bool IsTraversable(int column, int row)
+	{
+		if (!TerrainByCoordinate.TryGetValue((column, row), out var terrain))
+		{
+			return false;
+		}
+
+		return GetTerrainMoveCost(terrain) < 99;
+	}
+
+	private bool IsWithinMap(int column, int row) =>
+		CurrentMap is not null && column >= 0 && row >= 0 && column < CurrentMap.Width && row < CurrentMap.Height;
+
+	private static HexDirection NormalizeDirection(int direction)
+	{
+		var normalized = ((direction % 6) + 6) % 6;
+		return (HexDirection)normalized;
+	}
+
+	private static string GetTurnLabel(int delta) => delta < 0 ? "left" : "right";
+
+	private static int GetMovementByClassAndMode(MechClass mechClass, MovementMode movementMode) => movementMode switch
+	{
+		MovementMode.Walk => mechClass switch
+		{
+			MechClass.Light => 6,
+			MechClass.Medium => 5,
+			MechClass.Heavy => 4,
+			_ => 5
+		},
+		MovementMode.Run => mechClass switch
+		{
+			MechClass.Light => 8,
+			MechClass.Medium => 7,
+			MechClass.Heavy => 6,
+			_ => 7
+		},
+		MovementMode.Jump => mechClass switch
+		{
+			MechClass.Light => 5,
+			MechClass.Medium => 4,
+			MechClass.Heavy => 3,
+			_ => 4
+		},
+		_ => 5
+	};
+
+	private static int GetMovementHeat(MovementMode mode) => mode switch
+	{
+		MovementMode.Walk => 1,
+		MovementMode.Run => 2,
+		MovementMode.Jump => 3,
+		_ => 1
+	};
+
+	private void AddPlayerHeat(int amount)
+	{
+		PlayerHeat = Math.Max(0, PlayerHeat + amount);
+	}
+
+	private void InitializeSections(Dictionary<HitLocation, SectionState> sections, MechClass mechClass)
+	{
+		sections.Clear();
+		var scale = mechClass switch
+		{
+			MechClass.Light => 0.8,
+			MechClass.Medium => 1.0,
+			MechClass.Heavy => 1.3,
+			_ => 1.0
+		};
+
+		sections[HitLocation.Head] = ScaleSection(3, 3, scale);
+		sections[HitLocation.CenterTorso] = ScaleSection(10, 8, scale);
+		sections[HitLocation.LeftTorso] = ScaleSection(8, 6, scale);
+		sections[HitLocation.RightTorso] = ScaleSection(8, 6, scale);
+		sections[HitLocation.LeftArm] = ScaleSection(6, 4, scale);
+		sections[HitLocation.RightArm] = ScaleSection(6, 4, scale);
+		sections[HitLocation.LeftLeg] = ScaleSection(8, 6, scale);
+		sections[HitLocation.RightLeg] = ScaleSection(8, 6, scale);
+	}
+
+	private static SectionState ScaleSection(int armor, int internalStructure, double scale) =>
+		new((int)Math.Round(armor * scale), (int)Math.Round(internalStructure * scale));
+
+	private void RecalculateDurabilityTotals()
+	{
+		PlayerArmor = PlayerSections.Values.Sum(part => Math.Max(0, part.Armor));
+		PlayerInternal = PlayerSections.Values.Sum(part => Math.Max(0, part.Internal));
+		EnemyArmor = EnemySections.Values.Sum(part => Math.Max(0, part.Armor));
+		EnemyInternal = EnemySections.Values.Sum(part => Math.Max(0, part.Internal));
+	}
+
+	private static AttackArc GetIncomingArc(HexDirection targetFacing, int targetColumn, int targetRow, int attackerColumn, int attackerRow)
+	{
+		var bearing = GetDirectionToward(targetColumn, targetRow, attackerColumn, attackerRow);
+		if (bearing is null)
+		{
+			return AttackArc.Front;
+		}
+
+		var clockwise = (((int)bearing.Value - (int)targetFacing) + 6) % 6;
+		return clockwise switch
+		{
+			0 or 1 or 5 => AttackArc.Front,
+			2 => AttackArc.RightSide,
+			4 => AttackArc.LeftSide,
+			3 => AttackArc.Rear,
+			_ => AttackArc.Front
+		};
+	}
+
+	private static HitLocation RollHitLocation(AttackArc arc, int roll) => arc switch
+	{
+		AttackArc.Rear => roll switch
+		{
+			<= 2 => HitLocation.CenterTorso,
+			<= 4 => HitLocation.RightTorso,
+			<= 6 => HitLocation.RightArm,
+			<= 8 => HitLocation.CenterTorso,
+			<= 10 => HitLocation.LeftTorso,
+			<= 11 => HitLocation.LeftArm,
+			_ => HitLocation.Head
+		},
+		AttackArc.LeftSide => roll switch
+		{
+			<= 2 => HitLocation.LeftLeg,
+			<= 4 => HitLocation.LeftArm,
+			<= 6 => HitLocation.LeftTorso,
+			<= 8 => HitLocation.CenterTorso,
+			<= 10 => HitLocation.RightTorso,
+			<= 11 => HitLocation.RightArm,
+			_ => HitLocation.Head
+		},
+		AttackArc.RightSide => roll switch
+		{
+			<= 2 => HitLocation.RightLeg,
+			<= 4 => HitLocation.RightArm,
+			<= 6 => HitLocation.RightTorso,
+			<= 8 => HitLocation.CenterTorso,
+			<= 10 => HitLocation.LeftTorso,
+			<= 11 => HitLocation.LeftArm,
+			_ => HitLocation.Head
+		},
+		_ => roll switch
+		{
+			<= 2 => HitLocation.CenterTorso,
+			<= 4 => HitLocation.RightArm,
+			<= 6 => HitLocation.RightTorso,
+			<= 8 => HitLocation.CenterTorso,
+			<= 10 => HitLocation.LeftTorso,
+			<= 11 => HitLocation.LeftArm,
+			_ => HitLocation.Head
+		}
+	};
+
+	private static string FormatLocation(HitLocation location) => location switch
+	{
+		HitLocation.CenterTorso => "Center Torso",
+		HitLocation.LeftTorso => "Left Torso",
+		HitLocation.RightTorso => "Right Torso",
+		HitLocation.LeftArm => "Left Arm",
+		HitLocation.RightArm => "Right Arm",
+		HitLocation.LeftLeg => "Left Leg",
+		HitLocation.RightLeg => "Right Leg",
+		_ => "Head"
+	};
+
+	private static void ApplyDamage(
+		Dictionary<HitLocation, SectionState> sections,
+		HitLocation location,
+		int damage,
+		out int armorDamage,
+		out int internalDamage,
+		out int transferredToCenterTorso)
+	{
+		armorDamage = 0;
+		internalDamage = 0;
+		transferredToCenterTorso = 0;
+
+		if (!sections.TryGetValue(location, out var section))
+		{
+			return;
+		}
+
+		armorDamage = Math.Min(section.Armor, damage);
+		var remaining = damage - armorDamage;
+		var updatedArmor = section.Armor - armorDamage;
+
+		internalDamage = Math.Min(section.Internal, remaining);
+		remaining -= internalDamage;
+		sections[location] = section with { Armor = updatedArmor, Internal = section.Internal - internalDamage };
+
+		if (remaining > 0 && location != HitLocation.CenterTorso && sections.TryGetValue(HitLocation.CenterTorso, out var ct))
+		{
+			var ctDamage = Math.Min(ct.Internal, remaining);
+			sections[HitLocation.CenterTorso] = ct with { Internal = ct.Internal - ctDamage };
+			internalDamage += ctDamage;
+			transferredToCenterTorso = ctDamage;
+		}
+	}
+
+	private void ApplyHeatEndPhase(bool isPlayer)
+	{
+		if (isPlayer)
+		{
+			PlayerHeat = Math.Max(0, PlayerHeat - HeatSinkValue);
+			if (PlayerAmmoIntact && PlayerHeat >= 19 && Roll2d6() <= 4)
+			{
+				PlayerAmmoIntact = false;
+				ApplyDamage(PlayerSections, HitLocation.CenterTorso, 10, out _, out _, out _);
+				RecalculateDurabilityTotals();
+				LastActionMessage = "Ammo explosion! Player center torso takes critical damage.";
+			}
+			if (GetShutdownTargetNumber(PlayerHeat) is int playerShutdownTarget && Roll2d6() < playerShutdownTarget)
+			{
+				PlayerShutdown = true;
+			}
+			return;
+		}
+
+		EnemyHeat = Math.Max(0, EnemyHeat - HeatSinkValue);
+		if (EnemyAmmoIntact && EnemyHeat >= 19 && Roll2d6() <= 4)
+		{
+			EnemyAmmoIntact = false;
+			ApplyDamage(EnemySections, HitLocation.CenterTorso, 10, out _, out _, out _);
+			RecalculateDurabilityTotals();
+			LastEnemyAttackMessage = "Enemy ammo explosion damages its center torso.";
+		}
+		if (GetShutdownTargetNumber(EnemyHeat) is int enemyShutdownTarget && Roll2d6() < enemyShutdownTarget)
+		{
+			EnemyShutdown = true;
+		}
+	}
+
+	private void TryRecoverFromShutdown(bool isPlayer)
+	{
+		if (isPlayer)
+		{
+			if (!PlayerShutdown)
+			{
+				return;
+			}
+
+			if (Roll2d6() >= 6)
+			{
+				PlayerShutdown = false;
+			}
+			return;
+		}
+
+		if (!EnemyShutdown)
+		{
+			return;
+		}
+
+		if (Roll2d6() >= 6)
+		{
+			EnemyShutdown = false;
+		}
+	}
+
+	private static int? GetShutdownTargetNumber(int heat) => heat switch
+	{
+		>= 30 => 12,
+		>= 26 => 10,
+		>= 22 => 8,
+		>= 18 => 6,
+		>= 14 => 4,
+		_ => null
+	};
+
+	private static void InitializeComponents(Dictionary<HitLocation, List<ComponentStatus>> components)
+	{
+		components.Clear();
+		components[HitLocation.Head] = new();
+		components[HitLocation.CenterTorso] = new()
+		{
+			new(ComponentType.Engine, false),
+			new(ComponentType.Gyro, false)
+		};
+		components[HitLocation.LeftTorso] = new()
+		{
+			new(ComponentType.Weapon, false)
+		};
+		components[HitLocation.RightTorso] = new()
+		{
+			new(ComponentType.Weapon, false)
+		};
+		components[HitLocation.LeftArm] = new()
+		{
+			new(ComponentType.Weapon, false)
+		};
+		components[HitLocation.RightArm] = new()
+		{
+			new(ComponentType.Weapon, false)
+		};
+		components[HitLocation.LeftLeg] = new()
+		{
+			new(ComponentType.JumpJet, false),
+			new(ComponentType.JumpJet, false)
+		};
+		components[HitLocation.RightLeg] = new()
+		{
+			new(ComponentType.JumpJet, false),
+			new(ComponentType.JumpJet, false)
+		};
+	}
+
+	private string RollCriticalHit(Dictionary<HitLocation, List<ComponentStatus>> components, HitLocation location)
+	{
+		if (!components.TryGetValue(location, out var parts) || parts.Count == 0)
+		{
+			return string.Empty;
+		}
+
+		var functional = parts.Where(p => !p.IsDestroyed).ToList();
+		if (functional.Count == 0)
+		{
+			return string.Empty;
+		}
+
+		var roll = Roll2d6();
+		if (roll < CriticalHitThreshold)
+		{
+			return string.Empty;
+		}
+
+		var targetIndex = Random.Shared.Next(0, functional.Count);
+		var targetComponent = functional[targetIndex];
+		var partIndex = parts.IndexOf(targetComponent);
+		parts[partIndex] = targetComponent with { IsDestroyed = true };
+
+		return $"CRITICAL! {FormatLocation(location)} {FormatComponentType(targetComponent.Type)} destroyed!";
+	}
+
+	private static bool IsComponentDestroyed(Dictionary<HitLocation, List<ComponentStatus>> components, ComponentType type)
+	{
+		foreach (var parts in components.Values)
+		{
+			foreach (var part in parts)
+			{
+				if (part.Type == type && part.IsDestroyed)
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private static string GetComponentSummary(Dictionary<HitLocation, List<ComponentStatus>> components)
+	{
+		var destroyed = new List<string>();
+
+		foreach (var (location, parts) in components)
+		{
+			foreach (var part in parts.Where(p => p.IsDestroyed))
+			{
+				if (part.Type == ComponentType.Engine || part.Type == ComponentType.Gyro)
+				{
+					destroyed.Add(FormatComponentType(part.Type));
+				}
+				else if (part.Type == ComponentType.Weapon)
+				{
+					destroyed.Add("Weapon");
+				}
+			}
+		}
+
+		return destroyed.Count == 0 ? "OK" : string.Join(",", destroyed);
+	}
+
+	private string BuildPlayerMechTooltip()
+	{
+		if (UserMech is null)
+		{
+			return string.Empty;
+		}
+
+		return BuildMechTooltip(
+			"Player Mech",
+			UserMech,
+			PlayerSections,
+			PlayerComponents,
+			PlayerHeat,
+			PlayerShutdown,
+			PlayerAmmoIntact,
+			ActiveMovementMode);
+	}
+
+	private string BuildEnemyMechTooltip()
+	{
+		if (EnemyMech is null)
+		{
+			return string.Empty;
+		}
+
+		return BuildMechTooltip(
+			"Enemy Mech",
+			EnemyMech,
+			EnemySections,
+			EnemyComponents,
+			EnemyHeat,
+			EnemyShutdown,
+			EnemyAmmoIntact,
+			MovementMode.Walk);
+	}
+
+	private string BuildMechTooltip(
+		string title,
+		PlayerMech mech,
+		Dictionary<HitLocation, SectionState> sections,
+		Dictionary<HitLocation, List<ComponentStatus>> components,
+		int heat,
+		bool shutdown,
+		bool ammoIntact,
+		MovementMode mode)
+	{
+		var lines = new List<string>
+		{
+			title,
+			$"Class: {mech.Class}",
+			$"Facing: {mech.Facing}",
+			$"Mode: {mode}",
+			$"Movement: {mech.RemainingMovement}/{mech.MaxMovement}",
+			$"Heat: {heat} ({(shutdown ? "Shutdown" : "Online")})",
+			$"Ammo: {(ammoIntact ? "Safe" : "Exploded")}",
+			"Damage by location (Armor/Internal):"
+		};
+
+		foreach (var location in Enum.GetValues<HitLocation>())
+		{
+			if (sections.TryGetValue(location, out var section))
+			{
+				lines.Add($"- {FormatLocation(location)}: {Math.Max(0, section.Armor)}/{Math.Max(0, section.Internal)}");
+			}
+		}
+
+		var criticalLines = new List<string>();
+		foreach (var (location, parts) in components)
+		{
+			foreach (var part in parts.Where(part => part.IsDestroyed))
+			{
+				criticalLines.Add($"- {FormatLocation(location)} {FormatComponentType(part.Type)}");
+			}
+		}
+
+		if (criticalLines.Count == 0)
+		{
+			lines.Add("Critical damage: None");
+		}
+		else
+		{
+			lines.Add("Critical damage:");
+			lines.AddRange(criticalLines);
+		}
+
+		return string.Join("\n", lines);
+	}
+
+	private static string FormatComponentType(ComponentType type) => type switch
+	{
+		ComponentType.Engine => "Engine",
+		ComponentType.Gyro => "Gyro",
+		ComponentType.Weapon => "Weapon",
+		ComponentType.JumpJet => "JumpJet",
+		_ => "Unknown"
+	};
+
+	private void CheckGameOver()
+	{
+		if (PlayerInternal <= 0)
+		{
+			IsGameOver = true;
+			PlayerWon = false;
+		}
+		else if (EnemyInternal <= 0)
+		{
+			IsGameOver = true;
+			PlayerWon = true;
+		}
+	}
+
+	private void StartNewGame()
+	{
+		IsGameOver = false;
+		PlayerWon = false;
+		GenerateMap();
+	}
+
+	private static int GetArmorByClass(MechClass mechClass) => mechClass switch
+	{
+		MechClass.Light => 18,
+		MechClass.Medium => 28,
+		MechClass.Heavy => 40,
+		_ => 28
+	};
+
+	private static int GetInternalByClass(MechClass mechClass) => mechClass switch
+	{
+		MechClass.Light => 12,
+		MechClass.Medium => 18,
+		MechClass.Heavy => 24,
+		_ => 18
+	};
+
+	private static int GetRangeModifier(int range) => range switch
+	{
+		<= 3 => 0,
+		<= 6 => 2,
+		<= MaxWeaponRange => 4,
+		_ => 99
+	};
+
+	private static int GetAttackerMovementModifier(MovementMode mode) => mode switch
+	{
+		MovementMode.Walk => 1,
+		MovementMode.Run => 2,
+		MovementMode.Jump => 3,
+		_ => 1
+	};
+
+	private static int GetHeatToHitModifier(int heat) => heat switch
+	{
+		>= 17 => 3,
+		>= 13 => 2,
+		>= 8 => 1,
+		_ => 0
+	};
+
+	private static int GetTargetMovementModifier(int hexesMoved) => hexesMoved switch
+	{
+		<= 0 => 0,
+		<= 2 => 1,
+		<= 4 => 2,
+		<= 6 => 3,
+		_ => 4
+	};
+
+	private static int Roll2d6() => Random.Shared.Next(1, 7) + Random.Shared.Next(1, 7);
+
+	private static int GetMoveCost(TerrainType terrain, bool forward, MovementMode movementMode)
+	{
+		if (movementMode == MovementMode.Jump)
+		{
+			return 1;
+		}
+
+		return GetTerrainMoveCost(terrain) + (forward ? 0 : 1);
+	}
+
+	private static int GetTerrainMoveCost(TerrainType terrain) => terrain switch
+	{
+		TerrainType.Plains or TerrainType.Rock or TerrainType.Urban or TerrainType.Crater or TerrainType.Scrub or TerrainType.Sand or TerrainType.Ice => 1,
+		TerrainType.Hills or TerrainType.Forest or TerrainType.Jungle or TerrainType.Canyon => 2,
+		TerrainType.Swamp or TerrainType.Water => 3,
+		TerrainType.Mountains => 99,
+		_ => 1
+	};
+
+	private static (int Column, int Row) Step(int column, int row, HexDirection direction)
+	{
+		var isEvenRow = row % 2 == 0;
+
+		return direction switch
+		{
+			HexDirection.East => (column + 1, row),
+			HexDirection.NorthEast => isEvenRow ? (column, row - 1) : (column + 1, row - 1),
+			HexDirection.NorthWest => isEvenRow ? (column - 1, row - 1) : (column, row - 1),
+			HexDirection.West => (column - 1, row),
+			HexDirection.SouthWest => isEvenRow ? (column - 1, row + 1) : (column, row + 1),
+			HexDirection.SouthEast => isEvenRow ? (column, row + 1) : (column + 1, row + 1),
+			_ => (column, row)
+		};
+	}
+
+	private static int GetShortestTurnDelta(HexDirection from, HexDirection to)
+	{
+		var clockwise = (((int)to - (int)from) + 6) % 6;
+		var counterClockwise = (((int)from - (int)to) + 6) % 6;
+		return clockwise <= counterClockwise ? 1 : -1;
+	}
+
+	private static int GetDirectionDistance(HexDirection a, HexDirection b)
+	{
+		var diff = Math.Abs((int)a - (int)b);
+		return Math.Min(diff, 6 - diff);
+	}
+
+	private static HexDirection? GetDirectionToward(int fromColumn, int fromRow, int toColumn, int toRow)
+	{
+		if (fromColumn == toColumn && fromRow == toRow)
+		{
+			return null;
+		}
+
+		var origin = OddRToCube(fromColumn, fromRow);
+		var target = OddRToCube(toColumn, toRow);
+		var delta = new Cube(target.X - origin.X, target.Y - origin.Y, target.Z - origin.Z);
+
+		var bestDirection = HexDirection.East;
+		var bestDot = int.MinValue;
+
+		foreach (var candidate in Enum.GetValues<HexDirection>())
+		{
+			var vector = GetCubeDirectionVector(candidate);
+			var dot = (delta.X * vector.X) + (delta.Y * vector.Y) + (delta.Z * vector.Z);
+			if (dot > bestDot)
+			{
+				bestDot = dot;
+				bestDirection = candidate;
+			}
+		}
+
+		return bestDirection;
+	}
+
+	private static Cube GetCubeDirectionVector(HexDirection direction) => direction switch
+	{
+		HexDirection.East => new Cube(1, -1, 0),
+		HexDirection.NorthEast => new Cube(1, 0, -1),
+		HexDirection.NorthWest => new Cube(0, 1, -1),
+		HexDirection.West => new Cube(-1, 1, 0),
+		HexDirection.SouthWest => new Cube(-1, 0, 1),
+		HexDirection.SouthEast => new Cube(0, -1, 1),
+		_ => new Cube(0, 0, 0)
+	};
+
+	private static int CubeDistance(int columnA, int rowA, int columnB, int rowB)
+	{
+		var a = OddRToCube(columnA, rowA);
+		var b = OddRToCube(columnB, rowB);
+		return (Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y) + Math.Abs(a.Z - b.Z)) / 2;
+	}
+
+	private static Cube OddRToCube(int column, int row)
+	{
+		var x = column - ((row - (row & 1)) / 2);
+		var z = row;
+		var y = -x - z;
+		return new Cube(x, y, z);
+	}
+
+	private readonly record struct Cube(int X, int Y, int Z);
+}

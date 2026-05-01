@@ -1,0 +1,302 @@
+@using System.Globalization
+@using MechWar.Models
+
+@if (Map is null)
+{
+    <p class="map-empty">Generate a map to begin.</p>
+}
+else
+{
+    <div class="map-scroll">
+        <svg class="hex-map" viewBox="0 0 @ViewWidth @ViewHeight" role="img" aria-label="Generated hex map">
+            <defs>
+                <pattern id="texture-grain" width="10" height="10" patternUnits="userSpaceOnUse">
+                    <circle cx="2" cy="2" r="0.8" fill="#ffffff" fill-opacity="0.18" />
+                    <circle cx="7" cy="5" r="0.9" fill="#000000" fill-opacity="0.14" />
+                    <circle cx="4" cy="8" r="0.7" fill="#ffffff" fill-opacity="0.12" />
+                </pattern>
+                <pattern id="texture-rock" width="12" height="12" patternUnits="userSpaceOnUse">
+                    <path d="M1,3 L4,2 L6,5 L3,7 Z" fill="#ffffff" fill-opacity="0.14" />
+                    <path d="M7,8 L10,7 L11,10 L8,11 Z" fill="#000000" fill-opacity="0.18" />
+                </pattern>
+                <pattern id="texture-water" width="14" height="14" patternUnits="userSpaceOnUse">
+                    <path d="M0,5 C3,2 6,2 9,5 C12,8 14,8 14,8" stroke="#ffffff" stroke-opacity="0.25" stroke-width="1.1" fill="none" />
+                    <path d="M-1,10 C2,7 5,7 8,10 C11,13 14,13 15,13" stroke="#1f425d" stroke-opacity="0.35" stroke-width="1.1" fill="none" />
+                </pattern>
+                <pattern id="texture-forest" width="12" height="12" patternUnits="userSpaceOnUse">
+                    <path d="M2,10 L5,4 L8,10 Z" fill="#0f2f14" fill-opacity="0.35" />
+                    <path d="M8,7 L10,3 L12,7 Z" fill="#c8e0b8" fill-opacity="0.18" />
+                </pattern>
+                <pattern id="texture-urban" width="12" height="12" patternUnits="userSpaceOnUse">
+                    <rect x="1" y="1" width="4" height="4" fill="#23262b" fill-opacity="0.28" />
+                    <rect x="7" y="2" width="3" height="6" fill="#d7dbe1" fill-opacity="0.22" />
+                    <rect x="3" y="7" width="5" height="3" fill="#4a5059" fill-opacity="0.24" />
+                </pattern>
+                <pattern id="texture-ice" width="12" height="12" patternUnits="userSpaceOnUse">
+                    <path d="M1,6 L11,6" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1" />
+                    <path d="M3,2 L9,10" stroke="#6ea3b8" stroke-opacity="0.25" stroke-width="0.9" />
+                </pattern>
+                <pattern id="texture-sand" width="12" height="12" patternUnits="userSpaceOnUse">
+                    <circle cx="2" cy="9" r="0.9" fill="#ffffff" fill-opacity="0.2" />
+                    <circle cx="6" cy="4" r="0.7" fill="#8c652f" fill-opacity="0.22" />
+                    <circle cx="10" cy="8" r="0.8" fill="#ffffff" fill-opacity="0.18" />
+                </pattern>
+                <pattern id="texture-canyon" width="12" height="12" patternUnits="userSpaceOnUse">
+                    <path d="M0,4 C4,2 8,2 12,4" stroke="#6f3517" stroke-opacity="0.35" stroke-width="1.1" fill="none" />
+                    <path d="M0,8 C3,6 7,6 12,8" stroke="#f2d3a1" stroke-opacity="0.2" stroke-width="1" fill="none" />
+                </pattern>
+                <symbol id="decal-tree" viewBox="-6 -6 12 12">
+                    <path d="M-3,3 L0,-4 L3,3 Z" fill="#1e371d" fill-opacity="0.72" />
+                    <path d="M-2.1,1.9 L0,-2.7 L2.1,1.9 Z" fill="#a9c093" fill-opacity="0.35" />
+                </symbol>
+                <symbol id="decal-rock" viewBox="-6 -6 12 12">
+                    <path d="M-4,2 L-2,-2 L2,-3 L4,0 L2,3 L-2,4 Z" fill="#2a2d33" fill-opacity="0.35" />
+                    <path d="M-1.8,1.2 L-0.6,-1.2 L1.4,-1.4 L2.1,0.3 L1.0,2.0 L-0.8,2.2 Z" fill="#d8d8da" fill-opacity="0.2" />
+                </symbol>
+                <symbol id="decal-urban" viewBox="-6 -6 12 12">
+                    <rect x="-3.9" y="-2.7" width="2.5" height="5.2" fill="#25292f" fill-opacity="0.45" />
+                    <rect x="-0.7" y="-4" width="2.7" height="6.5" fill="#d7dce3" fill-opacity="0.22" />
+                    <rect x="2.4" y="-1.8" width="1.8" height="4.4" fill="#434a54" fill-opacity="0.35" />
+                </symbol>
+                <symbol id="decal-crater" viewBox="-6 -6 12 12">
+                    <ellipse cx="0" cy="0" rx="4.4" ry="2.9" fill="#1b1a1d" fill-opacity="0.28" />
+                    <ellipse cx="0" cy="0" rx="3.2" ry="2.0" fill="#b3b3b7" fill-opacity="0.2" />
+                </symbol>
+                <symbol id="decal-scrub" viewBox="-6 -6 12 12">
+                    <path d="M-3,2 C-2,0 -1,-1 0,2" stroke="#324326" stroke-width="1" stroke-opacity="0.55" fill="none" />
+                    <path d="M0,2 C1,0 2,-1 3,2" stroke="#b8c28d" stroke-width="0.85" stroke-opacity="0.45" fill="none" />
+                </symbol>
+            </defs>
+            @foreach (var tile in Map.Tiles)
+            {
+                var points = GetHexPoints(tile.Column, tile.Row);
+                var centerX = GetHexCenterX(tile.Column, tile.Row);
+                var centerY = GetHexCenterY(tile.Row);
+                var decal = GetTileDecal(tile);
+                var inPlayerArc = PlayerArcTiles?.Contains((tile.Column, tile.Row)) == true;
+                <g class="hex-tile">
+                    <title>@BuildTileTooltip(tile)</title>
+                    <polygon
+                        points="@points"
+                        fill="@TerrainCatalog.GetColor(tile.Terrain)"
+                        class="hex-cell hex-base" />
+                    <polygon
+                        points="@points"
+                        fill="url(#@GetTextureId(tile.Terrain))"
+                        class="hex-cell hex-overlay" />
+                    @if (inPlayerArc)
+                    {
+                        <polygon
+                            points="@points"
+                            class="hex-cell hex-fire-arc" />
+                    }
+                    @if (decal is not null)
+                    {
+                        <g class="hex-decal" transform="@GetDecalTransform(centerX, centerY, decal)">
+                            <use href="#@decal.SymbolId" opacity="@FormatNumber(decal.Opacity)" />
+                        </g>
+                    }
+                </g>
+            }
+
+            @if (EnemyMech is not null)
+            {
+                var enemyCenterX = GetHexCenterX(EnemyMech.Column, EnemyMech.Row);
+                var enemyCenterY = GetHexCenterY(EnemyMech.Row);
+                <g class="mech-token mech-token-enemy" transform="translate(@FormatNumber(enemyCenterX) @FormatNumber(enemyCenterY))">
+                    <title>@EnemyMechTooltip</title>
+                    <circle r="6.8" class="mech-body" />
+                    <g transform="rotate(@FormatNumber(GetFacingAngle(EnemyMech.Facing)))">
+                        <path d="M -2.8,-3.2 L 7,0 L -2.8,3.2 Z" class="mech-facing" />
+                    </g>
+                </g>
+            }
+
+            @if (Mech is not null)
+            {
+                var mechCenterX = GetHexCenterX(Mech.Column, Mech.Row);
+                var mechCenterY = GetHexCenterY(Mech.Row);
+                <g class="mech-token mech-token-player" transform="translate(@FormatNumber(mechCenterX) @FormatNumber(mechCenterY))">
+                    <title>@PlayerMechTooltip</title>
+                    <circle r="6.8" class="mech-body" />
+                    <g transform="rotate(@FormatNumber(GetFacingAngle(Mech.Facing)))">
+                        <path d="M -2.8,-3.2 L 7,0 L -2.8,3.2 Z" class="mech-facing" />
+                    </g>
+                </g>
+            }
+        </svg>
+    </div>
+}
+
+@code {
+    private const double HexSize = 16.0;
+
+    [Parameter]
+    public HexMap? Map { get; set; }
+
+    [Parameter]
+    public PlayerMech? Mech { get; set; }
+
+    [Parameter]
+    public PlayerMech? EnemyMech { get; set; }
+
+    [Parameter]
+    public IReadOnlySet<(int Column, int Row)>? PlayerArcTiles { get; set; }
+
+    [Parameter]
+    public string? PlayerMechTooltip { get; set; }
+
+    [Parameter]
+    public string? EnemyMechTooltip { get; set; }
+
+    private sealed record HexDecal(string SymbolId, double OffsetX, double OffsetY, double Rotation, double Scale, double Opacity);
+
+    private double ViewWidth =>
+        Map is null
+            ? 0
+            : Math.Sqrt(3) * HexSize * (Map.Width + 0.5);
+
+    private double ViewHeight =>
+        Map is null
+            ? 0
+            : HexSize * (1.5 * (Map.Height - 1) + 2);
+
+    private static string GetHexPoints(int column, int row)
+    {
+        var centerX = GetHexCenterX(column, row);
+        var centerY = GetHexCenterY(row);
+
+        var points = new string[6];
+
+        for (var index = 0; index < 6; index++)
+        {
+            var angle = Math.PI / 180 * (60 * index - 30);
+            var x = centerX + HexSize * Math.Cos(angle);
+            var y = centerY + HexSize * Math.Sin(angle);
+            points[index] = $"{FormatNumber(x)},{FormatNumber(y)}";
+        }
+
+        return string.Join(' ', points);
+    }
+
+    private static string GetTextureId(TerrainType terrain) => terrain switch
+    {
+        TerrainType.Water => "texture-water",
+        TerrainType.Forest or TerrainType.Jungle => "texture-forest",
+        TerrainType.Urban => "texture-urban",
+        TerrainType.Ice => "texture-ice",
+        TerrainType.Sand => "texture-sand",
+        TerrainType.Canyon => "texture-canyon",
+        TerrainType.Mountains or TerrainType.Rock or TerrainType.Crater => "texture-rock",
+        _ => "texture-grain"
+    };
+
+    private string BuildTileTooltip(HexTile tile)
+    {
+        var terrainLabel = TerrainCatalog.GetLabel(tile.Terrain);
+        var movement = GetMovementTooltip(tile.Terrain);
+        var firing = GetFiringTooltip(tile.Terrain);
+
+        var tooltip = $"Hex ({tile.Column}, {tile.Row})\nTerrain: {terrainLabel}\nMovement: {movement}\nFiring: {firing}";
+
+        if (Mech is not null && Mech.Column == tile.Column && Mech.Row == tile.Row && !string.IsNullOrWhiteSpace(PlayerMechTooltip))
+        {
+            tooltip += $"\n\n{PlayerMechTooltip}";
+        }
+
+        if (EnemyMech is not null && EnemyMech.Column == tile.Column && EnemyMech.Row == tile.Row && !string.IsNullOrWhiteSpace(EnemyMechTooltip))
+        {
+            tooltip += $"\n\n{EnemyMechTooltip}";
+        }
+
+        return tooltip;
+    }
+
+    private static string GetMovementTooltip(TerrainType terrain) => terrain switch
+    {
+        TerrainType.Mountains => "Impassable for walk/run; jump can cross at 1 MP",
+        TerrainType.Swamp or TerrainType.Water => "Walk/Run: 3 MP, Jump: 1 MP",
+        TerrainType.Hills or TerrainType.Forest or TerrainType.Jungle or TerrainType.Canyon => "Walk/Run: 2 MP, Jump: 1 MP",
+        _ => "Walk/Run: 1 MP, Jump: 1 MP"
+    };
+
+    private static string GetFiringTooltip(TerrainType terrain) => terrain switch
+    {
+        TerrainType.Forest or TerrainType.Jungle => "No direct terrain to-hit modifier currently (cover rules pending)",
+        TerrainType.Mountains => "No direct terrain to-hit modifier currently (LOS blocking pending)",
+        _ => "No direct terrain to-hit modifier in current rules"
+    };
+
+    private HexDecal? GetTileDecal(HexTile tile)
+    {
+        if (Map is null)
+        {
+            return null;
+        }
+
+        var presence = Noise(Map.Seed, tile.Column, tile.Row, 11);
+        var (symbolId, probability) = GetDecalProfile(tile.Terrain);
+
+        if (presence > probability)
+        {
+            return null;
+        }
+
+        var rotation = Lerp(-28, 28, Noise(Map.Seed, tile.Column, tile.Row, 19));
+        var scale = Lerp(0.76, 1.22, Noise(Map.Seed, tile.Column, tile.Row, 23));
+        var offsetX = Lerp(-2.8, 2.8, Noise(Map.Seed, tile.Column, tile.Row, 29));
+        var offsetY = Lerp(-2.4, 2.2, Noise(Map.Seed, tile.Column, tile.Row, 31));
+        var opacity = Lerp(0.33, 0.67, Noise(Map.Seed, tile.Column, tile.Row, 37));
+
+        return new HexDecal(symbolId, offsetX, offsetY, rotation, scale, opacity);
+    }
+
+    private static (string SymbolId, double Probability) GetDecalProfile(TerrainType terrain) => terrain switch
+    {
+        TerrainType.Forest or TerrainType.Jungle => ("decal-tree", 0.95),
+        TerrainType.Urban => ("decal-urban", 0.82),
+        TerrainType.Mountains or TerrainType.Rock or TerrainType.Hills => ("decal-rock", 0.7),
+        TerrainType.Crater => ("decal-crater", 0.88),
+        TerrainType.Scrub or TerrainType.Plains or TerrainType.Swamp or TerrainType.Sand => ("decal-scrub", 0.56),
+        TerrainType.Canyon => ("decal-rock", 0.74),
+        _ => ("decal-scrub", 0.0)
+    };
+
+    private static string GetDecalTransform(double centerX, double centerY, HexDecal decal) =>
+        $"translate({FormatNumber(centerX + decal.OffsetX)} {FormatNumber(centerY + decal.OffsetY)}) rotate({FormatNumber(decal.Rotation)}) scale({FormatNumber(decal.Scale)})";
+
+    private static double GetHexCenterX(int column, int row) => Math.Sqrt(3) * HexSize * (column + (row % 2 == 0 ? 0.5 : 1.0));
+
+    private static double GetHexCenterY(int row) => HexSize * (1.5 * row + 1.0);
+
+    private static double GetFacingAngle(HexDirection direction) => direction switch
+    {
+        HexDirection.East => 0,
+        HexDirection.NorthEast => -60,
+        HexDirection.NorthWest => -120,
+        HexDirection.West => 180,
+        HexDirection.SouthWest => 120,
+        HexDirection.SouthEast => 60,
+        _ => 0
+    };
+
+    private static double Noise(int seed, int column, int row, int salt)
+    {
+        unchecked
+        {
+            var hash = seed;
+            hash = (hash * 397) ^ column;
+            hash = (hash * 397) ^ row;
+            hash = (hash * 397) ^ salt;
+            hash ^= hash >> 13;
+            hash *= 1274126177;
+            hash ^= hash >> 16;
+            return (uint)hash / (double)uint.MaxValue;
+        }
+    }
+
+    private static double Lerp(double min, double max, double t) => min + ((max - min) * t);
+
+    private static string FormatNumber(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+}
+

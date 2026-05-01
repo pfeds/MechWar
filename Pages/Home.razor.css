@@ -1,0 +1,145 @@
+.controls {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(10rem, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.mode-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.mode-label {
+    font-weight: 600;
+    color: #3a3f4a;
+}
+
+
+.legend {
+    margin-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.battlefield-input {
+    border-radius: 10px;
+    outline: none;
+}
+
+.battlefield-input:focus-visible {
+    box-shadow: 0 0 0 0.22rem rgba(37, 140, 251, 0.35);
+}
+
+.turn-message {
+    margin-top: 0.7rem;
+    color: #3a3f4a;
+    font-weight: 600;
+}
+
+.combat-status {
+    margin-top: 0.6rem;
+    display: flex;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+    color: #2f3540;
+}
+
+.game-over-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.game-over-content {
+    text-align: center;
+    background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+    border: 3px solid #00ff00;
+    padding: 3rem 4rem;
+    box-shadow: 0 0 40px rgba(0, 255, 0, 0.5), inset 0 0 20px rgba(0, 255, 0, 0.1);
+}
+
+.game-over-text {
+    font-family: 'Courier New', monospace;
+    font-size: 4rem;
+    font-weight: bold;
+    color: #00ff00;
+    text-shadow: 0 0 20px #00ff00, 0 0 40px #00aa00;
+    margin: 0;
+    letter-spacing: 4px;
+    animation: flicker 0.15s infinite;
+}
+
+@keyframes flicker {
+    0%, 100% {
+        text-shadow: 0 0 20px #00ff00, 0 0 40px #00aa00;
+    }
+    50% {
+        text-shadow: 0 0 10px #00ff00, 0 0 20px #00aa00;
+    }
+}
+
+.game-result {
+    font-family: 'Courier New', monospace;
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin: 1.5rem 0 0 0;
+    text-shadow: 0 0 10px currentColor;
+    letter-spacing: 2px;
+}
+
+.game-result.win {
+    color: #00ff00;
+    text-shadow: 0 0 15px #00ff00, 0 0 30px #00aa00;
+}
+
+.game-result.lose {
+    color: #ff0000;
+    text-shadow: 0 0 15px #ff0000, 0 0 30px #aa0000;
+}
+
+.control-hint {
+    margin-top: 0.35rem;
+    color: #666;
+    font-size: 0.95rem;
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.45rem;
+    border: 1px solid #ddd;
+    border-radius: 0.5rem;
+    background: #fff;
+}
+
+.legend-swatch {
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 0.15rem;
+    border: 1px solid #777;
+}
+
+@media (max-width: 900px) {
+    .controls {
+        grid-template-columns: repeat(2, minmax(10rem, 1fr));
+    }
+}
+
