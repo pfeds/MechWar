@@ -118,6 +118,23 @@ else
                     <g transform="rotate(@FormatNumber(GetFacingAngle(EnemyMech.Facing)))">
                         <path d="M -2.8,-3.2 L 7,0 L -2.8,3.2 Z" class="mech-facing" />
                     </g>
+                    @if (EnemyMuzzleFlash)
+                    {
+                        <g class="muzzle-flash">
+                            <circle r="9.4" class="flash-ring" />
+                            <path d="M0,-11 L2.2,-6 L0,-7.2 L-2.2,-6 Z" class="flash-burst" />
+                        </g>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(EnemyImpactText))
+                    {
+                        <g class="impact-text-group" transform="translate(0,-13)">
+                            <svg:text text-anchor="middle" class="impact-text @(EnemyImpactIsDestruction ? "impact-destruction" : (EnemyImpactIsHit ? "impact-hit" : "impact-miss"))">@EnemyImpactText</svg:text>
+                            @if (!string.IsNullOrWhiteSpace(EnemyImpactDamageText))
+                            {
+                                <svg:text text-anchor="middle" dy="4" class="impact-damage">@EnemyImpactDamageText</svg:text>
+                            }
+                        </g>
+                    }
                 </g>
             }
 
@@ -131,6 +148,23 @@ else
                     <g transform="rotate(@FormatNumber(GetFacingAngle(Mech.Facing)))">
                         <path d="M -2.8,-3.2 L 7,0 L -2.8,3.2 Z" class="mech-facing" />
                     </g>
+                    @if (PlayerMuzzleFlash)
+                    {
+                        <g class="muzzle-flash">
+                            <circle r="9.4" class="flash-ring" />
+                            <path d="M0,-11 L2.2,-6 L0,-7.2 L-2.2,-6 Z" class="flash-burst" />
+                        </g>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(PlayerImpactText))
+                    {
+                        <g class="impact-text-group" transform="translate(0,-13)">
+                            <svg:text text-anchor="middle" class="impact-text @(PlayerImpactIsDestruction ? "impact-destruction" : (PlayerImpactIsHit ? "impact-hit" : "impact-miss"))">@PlayerImpactText</svg:text>
+                            @if (!string.IsNullOrWhiteSpace(PlayerImpactDamageText))
+                            {
+                                <svg:text text-anchor="middle" dy="4" class="impact-damage">@PlayerImpactDamageText</svg:text>
+                            }
+                        </g>
+                    }
                 </g>
             }
         </svg>
@@ -157,6 +191,36 @@ else
 
     [Parameter]
     public string? EnemyMechTooltip { get; set; }
+
+    [Parameter]
+    public bool PlayerMuzzleFlash { get; set; }
+
+    [Parameter]
+    public bool EnemyMuzzleFlash { get; set; }
+
+    [Parameter]
+    public string? PlayerImpactText { get; set; }
+
+    [Parameter]
+    public string? PlayerImpactDamageText { get; set; }
+
+    [Parameter]
+    public bool PlayerImpactIsHit { get; set; }
+
+    [Parameter]
+    public bool PlayerImpactIsDestruction { get; set; }  // NEW: Track if this is a destruction message
+
+    [Parameter]
+    public string? EnemyImpactText { get; set; }
+
+    [Parameter]
+    public string? EnemyImpactDamageText { get; set; }
+
+    [Parameter]
+    public bool EnemyImpactIsHit { get; set; }
+
+    [Parameter]
+    public bool EnemyImpactIsDestruction { get; set; }  // NEW: Track if this is a destruction message
 
     private sealed record HexDecal(string SymbolId, double OffsetX, double OffsetY, double Rotation, double Scale, double Opacity);
 

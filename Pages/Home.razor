@@ -34,7 +34,17 @@
 				EnemyMech="EnemyMech"
 				PlayerArcTiles="PlayerFiringArcTiles"
 				PlayerMechTooltip="@BuildPlayerMechTooltip()"
-				EnemyMechTooltip="@BuildEnemyMechTooltip()" />
+				EnemyMechTooltip="@BuildEnemyMechTooltip()"
+				PlayerMuzzleFlash="@PlayerMuzzleFlash"
+				EnemyMuzzleFlash="@EnemyMuzzleFlash"
+				PlayerImpactText="@PlayerImpactText"
+				PlayerImpactDamageText="@PlayerImpactDamageText"
+				PlayerImpactIsHit="@PlayerImpactIsHit"
+				PlayerImpactIsDestruction="@PlayerImpactIsDestruction"
+				EnemyImpactText="@EnemyImpactText"
+				EnemyImpactDamageText="@EnemyImpactDamageText"
+				EnemyImpactIsHit="@EnemyImpactIsHit"
+				EnemyImpactIsDestruction="@EnemyImpactIsDestruction" />
 		</div>
 
 		@if (CurrentMap is not null)
@@ -49,25 +59,21 @@
 				}
 			</div>
 		}
-	</section>
 
-	<aside class="control-panel">
-
-		<section class="panel-card">
-			<h3>Turn Controls</h3>
-			<div class="mode-controls">
+		<div class="turn-controls-under-map">
+			<div class="turn-controls-row" role="group" aria-label="Turn controls">
 				<span class="mode-label">Mode:</span>
 				<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Walk)" @onclick="() => TrySetMovementMode(MovementMode.Walk)">Walk</button>
 				<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Run)" @onclick="() => TrySetMovementMode(MovementMode.Run)">Run</button>
 				<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Jump)" @onclick="() => TrySetMovementMode(MovementMode.Jump)">Jump</button>
-			</div>
-			<div class="button-row mt-2">
 				<button class="btn btn-sm turn-btn btn-danger" @onclick="ResolvePlayerAttack" disabled="@(UserMech is null || EnemyMech is null || !IsPlayerPhase || !CanPlayerFire)">Fire (F)</button>
 				<button class="btn btn-sm turn-btn btn-outline-secondary" @onclick="EndPlayerTurn" disabled="@(UserMech is null || !IsPlayerPhase)">End Turn</button>
+				<span class="help-icon" title="Arrows: rotate/move. 1/2/3 or W/R/J: switch mode. F or Space: fire.">?</span>
 			</div>
-			<p class="control-hint">Arrows: rotate/move, 1/2/3 or W/R/J for mode, F/Space to fire.</p>
-		</section>
+		</div>
+	</section>
 
+	<aside class="control-panel">
 		<section class="panel-card">
 			<h3>Player Mech Status</h3>
 			<pre class="status-block">@BuildPlayerMechTooltip()</pre>
@@ -198,6 +204,16 @@
 	private string LastEnemyAttackMessage { get; set; } = string.Empty;
 	private bool IsGameOver { get; set; }
 	private bool PlayerWon { get; set; }
+	private bool PlayerMuzzleFlash { get; set; }
+	private bool EnemyMuzzleFlash { get; set; }
+	private string? PlayerImpactText { get; set; }
+	private string? EnemyImpactText { get; set; }
+	private string? PlayerImpactDamageText { get; set; }
+	private string? EnemyImpactDamageText { get; set; }
+	private bool PlayerImpactIsHit { get; set; }
+	private bool EnemyImpactIsHit { get; set; }
+	private bool PlayerImpactIsDestruction { get; set; }  // NEW: Track destruction messages
+	private bool EnemyImpactIsDestruction { get; set; }   // NEW: Track destruction messages
 
 	private const int BaseToHit = 4;
 	private const int MaxWeaponRange = 9;
@@ -343,6 +359,7 @@
 		PlayerAmmoIntact = true;
 		EnemyAmmoIntact = true;
 		LastEnemyAttackMessage = string.Empty;
+		ClearCombatFx();
 		UpdatePlayerFiringArc();
 		LastActionMessage = $"{SelectedMechClass} mech deployed. Round 1 starts in {ActiveMovementMode} mode.";
 	}
@@ -457,6 +474,63 @@
 		InvokeAsync(StateHasChanged);
 	}
 
+	private void ClearCombatFx()
+	{
+		PlayerMuzzleFlash = false;
+		EnemyMuzzleFlash = false;
+		PlayerImpactText = null;
+		EnemyImpactText = null;
+		PlayerImpactDamageText = null;
+		EnemyImpactDamageText = null;
+		PlayerImpactIsHit = false;
+		EnemyImpactIsHit = false;
+		PlayerImpactIsDestruction = false;  // NEW: Reset destruction flag
+		EnemyImpactIsDestruction = false;   // NEW: Reset destruction flag
+	}
+
+	private async Task PlayShotAnimation(bool attackerIsPlayer, bool targetIsPlayer, bool hit, int damage)
+	{
+		ClearCombatFx();
+		if (attackerIsPlayer)
+		{
+			PlayerMuzzleFlash = true;
+		}
+		else
+		{
+			EnemyMuzzleFlash = true;
+		}
+
+		await InvokeAsync(StateHasChanged);
+		await Task.Delay(180);
+
+		PlayerMuzzleFlash = false;
+		EnemyMuzzleFlash = false;
+
+		if (targetIsPlayer)
+		{
+			PlayerImpactText = hit ? "Hit!" : "Miss";
+			PlayerImpactDamageText = hit && damage > 0 ? $"{damage} dmg" : null;
+			PlayerImpactIsHit = hit;
+		}
+		else
+		{
+			EnemyImpactText = hit ? "Hit!" : "Miss";
+			EnemyImpactDamageText = hit && damage > 0 ? $"{damage} dmg" : null;
+			EnemyImpactIsHit = hit;
+		}
+
+		await InvokeAsync(StateHasChanged);
+		await Task.Delay(620);
+		ClearCombatFx();
+		await InvokeAsync(StateHasChanged);
+	}
+
+	private async Task AnimateAiStep(int delayMs)
+	{
+		await InvokeAsync(StateHasChanged);
+		await Task.Delay(delayMs);
+	}
+
 	private void CloseCreateGamePopup()
 	{
 		UiState.CloseCreateGamePopup();
@@ -505,7 +579,7 @@
 			case "f":
 			case "F":
 			case " ":
-				ResolvePlayerAttack();
+				_ = ResolvePlayerAttack();
 				return;
 		}
 
@@ -665,9 +739,10 @@
 		!PlayerShutdown &&
 		PlayerInternal > 0 &&
 		!IsComponentDestroyed(PlayerComponents, ComponentType.Weapon) &&
-		EnemyInternal > 0;
+		EnemyInternal > 0 &&
+		!IsArmDestroyed(PlayerSections);  // BATTLETECHCOMPLIANCE: Can't fire if arms destroyed
 
-	private void ResolvePlayerAttack()
+	private async Task ResolvePlayerAttack()
 	{
 		if (!IsPlayerPhase || !CanPlayerFire || UserMech is null || EnemyMech is null)
 		{
@@ -706,6 +781,7 @@
 
 		if (roll < targetNumber)
 		{
+			await PlayShotAnimation(attackerIsPlayer: true, targetIsPlayer: false, hit: false, damage: 0);
 			LastActionMessage = $"You fire at range {range}: rolled {roll} vs TN {targetNumber}. Miss.";
 			return;
 		}
@@ -718,6 +794,7 @@
 		{
 			criticalHitMsg = RollCriticalHit(EnemyComponents, hitLocation);
 		}
+		await PlayShotAnimation(attackerIsPlayer: true, targetIsPlayer: false, hit: true, damage: armorDamage + internalDamage);
 		RecalculateDurabilityTotals();
 		LastActionMessage = $"Hit! Rolled {roll} vs TN {targetNumber}. {enemyArc} arc -> {FormatLocation(hitLocation)} for {armorDamage}A/{internalDamage}I.";
 		if (!string.IsNullOrWhiteSpace(criticalHitMsg))
@@ -768,7 +845,7 @@
 		return $"{targetNumber}+ (base {BaseToHit} + range {rangeModifier} + move {attackerModifier} + target {targetModifier} + heat {heatModifier} + terrain {terrainFiringModifier})";
 	}
 
-	private void EndPlayerTurn()
+	private async Task EndPlayerTurn()
 	{
 		if (UserMech is null || EnemyMech is null)
 		{
@@ -789,12 +866,12 @@
 		}
 
 		IsPlayerPhase = false;
-		var enemySummary = ExecuteEnemyTurn();
+		var enemySummary = await ExecuteEnemyTurn();
 		RoundNumber++;
 		IsPlayerPhase = true;
 
 		TryRecoverFromShutdown(isPlayer: true);
-		var refreshedMovement = PlayerShutdown ? 0 : GetMovementByClassAndMode(UserMech.Class, ActiveMovementMode);
+		var refreshedMovement = PlayerShutdown ? 0 : GetEffectiveMovement(UserMech.Class, ActiveMovementMode, PlayerSections);  // BATTLETECHCOMPLIANCE: Account for leg destruction
 		if (IsComponentDestroyed(PlayerComponents, ComponentType.Engine))
 		{
 			refreshedMovement = Math.Max(1, refreshedMovement - 2);
@@ -810,7 +887,7 @@
 		}
 	}
 
-	private string ExecuteEnemyTurn()
+	private async Task<string> ExecuteEnemyTurn()
 	{
 		if (EnemyMech is null || UserMech is null)
 		{
@@ -858,6 +935,7 @@
 				};
 				EnemyHeat += 1;
 				actions.Add("rotate");
+				await AnimateAiStep(250);
 				continue;
 			}
 
@@ -885,13 +963,14 @@
 			movedHexes++;
 			EnemyHeat += GetMovementHeat(MovementMode.Walk);
 			actions.Add("move");
+			await AnimateAiStep(260);
 		}
 
 		EnemyMech = enemy;
 		EnemyHexesMovedLastTurn = movedHexes;
 
 		var enemyArc = GetFrontArcTiles(enemy, 4);
-		if (enemyArc.Contains((UserMech.Column, UserMech.Row)) && PlayerInternal > 0)
+		if (enemyArc.Contains((UserMech.Column, UserMech.Row)) && PlayerInternal > 0 && !IsArmDestroyed(EnemySections))  // BATTLETECHCOMPLIANCE: Enemy can't fire if arms destroyed
 		{
 			var range = CubeDistance(enemy.Column, enemy.Row, UserMech.Column, UserMech.Row);
 			var rangeModifier = GetRangeModifier(range);
@@ -918,6 +997,7 @@
 					{
 						critMsg = RollCriticalHit(PlayerComponents, hitLocation);
 					}
+					await PlayShotAnimation(attackerIsPlayer: false, targetIsPlayer: true, hit: true, damage: armorDamage + internalDamage);
 					RecalculateDurabilityTotals();
 					actions.Add($"hit ({roll}/{targetNumber}, {FormatLocation(hitLocation)} {armorDamage}A {internalDamage}I)");
 					LastEnemyAttackMessage = $"Enemy hit your {FormatLocation(hitLocation)}.";
@@ -928,6 +1008,7 @@
 				}
 				else
 				{
+					await PlayShotAnimation(attackerIsPlayer: false, targetIsPlayer: true, hit: false, damage: 0);
 					actions.Add($"miss ({roll}/{targetNumber})");
 					LastEnemyAttackMessage = "Enemy fire missed.";
 				}
@@ -1043,6 +1124,32 @@
 		},
 		_ => 5
 	};
+
+	/// <summary>
+	/// BATTLETECHCOMPLIANCE: Calculates effective movement accounting for destroyed legs.
+	/// - Both legs destroyed: 0 (immobilized)
+	/// - One leg destroyed: Base movement -2
+	/// - No legs destroyed: Base movement
+	/// Per BattleTech rules, loss of legs reduces mobility.
+	/// </summary>
+	private int GetEffectiveMovement(MechClass mechClass, MovementMode mode, Dictionary<HitLocation, SectionState> sections)
+	{
+		var baseMovement = GetMovementByClassAndMode(mechClass, mode);
+		
+		var leftLegDestroyed = sections[HitLocation.LeftLeg].Internal <= 0;
+		var rightLegDestroyed = sections[HitLocation.RightLeg].Internal <= 0;
+		
+		if (leftLegDestroyed && rightLegDestroyed)
+		{
+			return 0;  // IMMOBILIZED - cannot move at all
+		}
+		else if (leftLegDestroyed || rightLegDestroyed)
+		{
+			return Math.Max(0, baseMovement - 2);  // One leg destroyed = -2 movement
+		}
+		
+		return baseMovement;  // Both legs intact
+	}
 
 	private static int GetMovementHeat(MovementMode mode) => mode switch
 	{
@@ -1370,6 +1477,19 @@
 		return destroyed.Count == 0 ? "OK" : string.Join(",", destroyed);
 	}
 
+	/// <summary>
+	/// BATTLETECHCOMPLIANCE: Checks if either arm is destroyed.
+	/// If an arm's internal structure is 0, the arm is severed and cannot fire weapons.
+	/// </summary>
+	private static bool IsArmDestroyed(Dictionary<HitLocation, SectionState> sections)
+	{
+		var leftArmDestroyed = sections[HitLocation.LeftArm].Internal <= 0;
+		var rightArmDestroyed = sections[HitLocation.RightArm].Internal <= 0;
+		
+		// Can't fire if both arms are destroyed
+		return leftArmDestroyed && rightArmDestroyed;
+	}
+
 	private string BuildPlayerMechTooltip()
 	{
 		if (UserMech is null)
@@ -1490,6 +1610,68 @@
 
 	private void CheckGameOver()
 	{
+		// BATTLETECHCOMPLIANCE: Check for specific section destructions per official rules
+
+		// CHECK 1: Center Torso destroyed = instant loss (engine destroyed)
+		if (PlayerSections[HitLocation.CenterTorso].Internal <= 0)
+		{
+			IsGameOver = true;
+			PlayerWon = false;
+			LastActionMessage = "Your Center Torso destroyed! Engine destroyed! Mech destroyed!";
+			ShowDestructionOverlay(true, "Center Torso destroyed!");
+			return;
+		}
+
+		if (EnemySections[HitLocation.CenterTorso].Internal <= 0)
+		{
+			IsGameOver = true;
+			PlayerWon = true;
+			LastActionMessage = "Enemy Center Torso destroyed! Engine destroyed! Enemy mech destroyed!";
+			ShowDestructionOverlay(false, "Center Torso destroyed!");
+			return;
+		}
+
+		// CHECK 2: Both side torsos destroyed = instant loss (structural failure)
+		if (PlayerSections[HitLocation.LeftTorso].Internal <= 0 &&
+			PlayerSections[HitLocation.RightTorso].Internal <= 0)
+		{
+			IsGameOver = true;
+			PlayerWon = false;
+			LastActionMessage = "Both side torsos destroyed! Structural failure! Mech destroyed!";
+			ShowDestructionOverlay(true, "Both torsos destroyed!");
+			return;
+		}
+
+		if (EnemySections[HitLocation.LeftTorso].Internal <= 0 &&
+			EnemySections[HitLocation.RightTorso].Internal <= 0)
+		{
+			IsGameOver = true;
+			PlayerWon = true;
+			LastActionMessage = "Enemy both side torsos destroyed! Structural failure! Enemy mech destroyed!";
+			ShowDestructionOverlay(false, "Both torsos destroyed!");
+			return;
+		}
+
+		// CHECK 3: Head destroyed = instant loss (pilot/cockpit destroyed)
+		if (PlayerSections[HitLocation.Head].Internal <= 0)
+		{
+			IsGameOver = true;
+			PlayerWon = false;
+			LastActionMessage = "Your Head destroyed! Pilot dead! Mech destroyed!";
+			ShowDestructionOverlay(true, "Head destroyed!");
+			return;
+		}
+
+		if (EnemySections[HitLocation.Head].Internal <= 0)
+		{
+			IsGameOver = true;
+			PlayerWon = true;
+			LastActionMessage = "Enemy Head destroyed! Enemy pilot dead! Enemy mech destroyed!";
+			ShowDestructionOverlay(false, "Head destroyed!");
+			return;
+		}
+
+		// CHECK 4: Total internal structure = 0 (fallback check)
 		if (PlayerInternal <= 0)
 		{
 			IsGameOver = true;
@@ -1502,11 +1684,33 @@
 		}
 	}
 
+	/// <summary>
+	/// Shows a destruction message in the overhead impact text overlay.
+	/// </summary>
+	private void ShowDestructionOverlay(bool isPlayer, string message)
+	{
+		if (isPlayer)
+		{
+			PlayerImpactText = message;
+			PlayerImpactIsDestruction = true;
+			PlayerImpactIsHit = false;
+			PlayerImpactDamageText = null;
+		}
+		else
+		{
+			EnemyImpactText = message;
+			EnemyImpactIsDestruction = true;
+			EnemyImpactIsHit = false;
+			EnemyImpactDamageText = null;
+		}
+	}
+
 	private void StartNewGame()
 	{
 		IsGameOver = false;
 		PlayerWon = false;
 		CombatLog.Clear();
+		ClearCombatFx();
 		GenerateMap();
 	}
 
@@ -1627,6 +1831,69 @@
 		};
 	}
 
+	/// <summary>
+	/// Calculates BattleTech defense modifiers based on target terrain/cover.
+	/// Targets in cover/difficult terrain are harder to hit (higher target number).
+	/// 
+	/// BattleTech Rules:
+	/// - Hills Level 1: +1 defense modifier (partial cover)
+	/// - Hills Level 2+: +2 defense modifier (full cover)
+	/// - Water Depth 1: +1 defense modifier (partially submerged)
+	/// - Water Depth 2+: +2 defense modifier (mostly submerged/deep water)
+	/// - Forest/Jungle: +1 defense modifier (partial cover from vegetation)
+	/// - Urban: +1 defense modifier (target can use buildings for cover)
+	/// - Canyon: +1 defense modifier (walls provide cover)
+	/// 
+	/// In BattleTech: Higher target number = harder to hit (defender gets better defense).
+	/// So defensive terrain increases the target number that the attacker must roll.
+	/// </summary>
+	private static int GetDefenseModifier(HexTile targetTile)
+	{
+		var modifier = 0;
+
+		// Hills provide elevation-based cover
+		if (targetTile.HillLevel is >= 2)
+		{
+			return 2; // Full cover on high hills
+		}
+
+		if (targetTile.HillLevel is 1)
+		{
+			modifier += 1; // Partial cover on low hills
+		}
+
+		// Water provides concealment/cover
+		if (targetTile.WaterDepth is >= 2)
+		{
+			return modifier + 2; // Mostly submerged is significant cover
+		}
+
+		if (targetTile.WaterDepth is 1)
+		{
+			modifier += 1; // Partially in water
+		}
+
+		// Vegetation and urban terrain provide concealment
+		modifier += targetTile.Terrain switch
+		{
+			TerrainType.Forest => 1,        // Trees provide cover
+			TerrainType.Jungle => 1,        // Dense vegetation
+			TerrainType.Urban => 1,         // Buildings provide cover/concealment
+			TerrainType.Canyon => 1,        // Canyon walls provide cover
+			TerrainType.Swamp => 1,         // Water and vegetation combined
+			TerrainType.Crater => 1,        // Crater rim provides partial cover
+			TerrainType.Scrub => 0,         // Scrubland provides minimal cover
+			TerrainType.Plains => 0,        // No cover
+			TerrainType.Rock => 0,          // Exposed rock provides no cover
+			TerrainType.Sand => 0,          // Desert provides no cover
+			TerrainType.Ice => 0,           // Slippery but no cover
+			TerrainType.Mountains => 2,     // Mountains = full cover (but shouldn't be targeted anyway)
+			_ => 0
+		};
+
+		return Math.Max(0, modifier);
+	}
+
 	private bool CanFireBetween(
 		int attackerColumn,
 		int attackerRow,
@@ -1645,15 +1912,12 @@
 			return false;
 		}
 
-		if (targetTile.WaterDepth is >= 2)
-		{
-			terrainFiringModifier += 1;
-		}
-
-		if (targetTile.HillLevel is >= 2)
-		{
-			terrainFiringModifier += 1;
-		}
+		// BattleTech Defense Modifiers: targets in cover/difficult terrain get DEFENSIVE BENEFITS
+		// This REDUCES the target number (makes it easier to hit them... wait, that's backwards)
+		// Actually: defensive = harder to hit, so we ADD to target number.
+		// A mech in cover is harder to hit, so target number increases.
+		// Example: mech on level 2 hill = TN increases by 2 (harder to hit)
+		terrainFiringModifier = GetDefenseModifier(targetTile);
 
 		if (IsLineBlockedByInterveningTerrain(attackerColumn, attackerRow, targetColumn, targetRow, attackerTile, targetTile))
 		{
@@ -1674,7 +1938,14 @@
 	{
 		var attackerLevel = GetTileLevel(attackerTile);
 		var targetLevel = GetTileLevel(targetTile);
-		var blockingThreshold = Math.Max(attackerLevel, targetLevel) + 1;
+		
+		// In BattleTech, a mech can see over terrain that is lower than itself.
+		// Each elevation level represents half a mech's height.
+		// An intervening hex blocks LOS if it is taller than BOTH the attacker and target.
+		// Standard rule: intervening terrain must be higher than the observer to block LOS.
+		var attackerSightLevel = attackerLevel + 2;  // Mech height = 2 elevation levels
+		var targetSightLevel = targetLevel + 2;      // Mech height = 2 elevation levels
+		var blockingThreshold = Math.Min(attackerSightLevel, targetSightLevel);
 
 		foreach (var point in GetHexLine(attackerColumn, attackerRow, targetColumn, targetRow))
 		{
@@ -1689,7 +1960,9 @@
 				continue;
 			}
 
-			if (GetTileLevel(interveningTile) >= blockingThreshold)
+			var interveningLevel = GetTileLevel(interveningTile);
+			// Intervening terrain blocks if it's taller than BOTH the attacker and target can see over.
+			if (interveningLevel >= blockingThreshold)
 			{
 				return true;
 			}

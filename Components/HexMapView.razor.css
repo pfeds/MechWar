@@ -94,6 +94,84 @@
     stroke: #203860;
 }
 
+.muzzle-flash {
+    pointer-events: none;
+}
+
+.flash-ring {
+    fill: none;
+    stroke: #ffd37d;
+    stroke-width: 1.2;
+    opacity: 0.9;
+    animation: flashPulse 0.22s ease-out;
+}
+
+.flash-burst {
+    fill: #ffe7a7;
+    stroke: #b27421;
+    stroke-width: 0.5;
+    animation: flashPulse 0.22s ease-out;
+}
+
+.impact-text-group {
+    pointer-events: none;
+}
+
+.impact-text {
+    font-size: 4.8px;  /* Increased from 3.4px for better visibility */
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    paint-order: stroke;
+    stroke-width: 0.8px;  /* Slightly thicker stroke for bigger text */
+    animation: impactPop 0.3s ease-out;
+}
+
+.impact-hit {
+    fill: #ff5a5a;
+    stroke: #3d0c0c;
+}
+
+.impact-miss {
+    fill: #7ebcff;
+    stroke: #0f2d58;
+}
+
+.impact-destruction {
+    fill: #ff2c2c;  /* Brighter red for destruction messages */
+    stroke: #7d0000;  /* Darker red stroke for destruction */
+}
+
+.impact-damage {
+    font-size: 3.5px;  /* Increased from 2.55px to match larger impact-text */
+    fill: #ffd0d0;
+    stroke: #361111;
+    stroke-width: 0.55px;  /* Adjusted for larger size */
+    paint-order: stroke;
+    font-weight: 700;
+}
+
+@keyframes flashPulse {
+    0% {
+        transform: scale(0.55);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1.2);
+        opacity: 0.15;
+    }
+}
+
+@keyframes impactPop {
+    0% {
+        transform: translateY(1px);
+        opacity: 0;
+    }
+    100% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
 .map-empty {
     color: #666;
 }
