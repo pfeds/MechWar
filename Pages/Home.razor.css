@@ -411,15 +411,6 @@
     border-bottom: 1px solid #e5eaf2;
     padding-bottom: 0.3rem;
 }
-    font-size: 0.8rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: #64748b;
-    margin: 0 0 0.6rem 0;
-    border-bottom: 1px solid #e5eaf2;
-    padding-bottom: 0.3rem;
-}
 
 .lobby-row {
     display: flex;

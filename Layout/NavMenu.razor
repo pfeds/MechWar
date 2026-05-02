@@ -1,27 +1,9 @@
 ﻿@inject MechWar.Services.GameUiState UiState
 @inject NavigationManager Nav
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">MechWar</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
-</div>
-
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
-    <div class="sidebar-info px-3 py-3">
-        <h6>Mission Control</h6>
-        <nav>
-            <a href="/" class="nav-link">🏠 Mission Briefing</a>
-            <a href="/game" class="nav-link">⚔ Battlefield</a>
-        </nav>
-    </div>
-</div>
+<nav class="top-nav">
+    <a href="/" class="top-nav-link" title="Return to Mission Briefing">⬅ Exit</a>
+</nav>
 
 @code {
-    private bool collapseNavMenu = true;
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
-    private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
 }

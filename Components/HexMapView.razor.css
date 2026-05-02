@@ -1,4 +1,6 @@
 .map-scroll {
+    width: 100%;
+    min-height: 0;
     max-width: 100%;
     overflow: auto;
     border: 1px solid #3d3d44;
@@ -11,6 +13,8 @@
 
 .hex-map {
     display: block;
+    width: 100%;
+    height: auto;
     min-width: 680px;
 }
 

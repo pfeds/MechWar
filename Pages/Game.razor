@@ -12,88 +12,76 @@
 
 <PageTitle>MechWar — Battle</PageTitle>
 
-<div class="battlefield-layout">
-	<section class="map-column">
-		@if (CurrentMap is not null)
-		{
-			<p class="map-meta">
-				Theme: <strong>@CurrentMap.Theme.DisplayName</strong>
-				| Size: <strong>@CurrentMap.Width x @CurrentMap.Height</strong>
-				| Round: <strong>@RoundNumber</strong>
-				| Phase: <strong>@(IsPlayerPhase ? "Player" : "Enemy")</strong>
-			</p>
-		}
+<div class="battlefield-container">
+	<div class="battlefield-main">
+		<div class="map-wrapper">
+			<div class="battlefield-input"
+				 tabindex="0"
+				 @ref="BattlefieldInputRef"
+				 @onclick="FocusBattlefield"
+				 @onkeydown="HandleBattlefieldKey"
+				 @onkeydown:preventDefault="true">
+				<div class="map-status-overlay">
+					<div class="status-round-phase">Round @RoundNumber · @(IsPlayerPhase ? "Your Turn" : "Enemy's Turn")</div>
+					<div class="status-theme">@CurrentMap?.Theme.DisplayName</div>
+				</div>
 
-		<div class="battlefield-input"
-			 tabindex="0"
-			 @ref="BattlefieldInputRef"
-			 @onclick="FocusBattlefield"
-			 @onkeydown="HandleBattlefieldKey"
-			 @onkeydown:preventDefault="true">
-			<HexMapView
-				Map="CurrentMap"
-				Mech="UserMech"
-				EnemyMech="EnemyMech"
-				PlayerArcTiles="PlayerFiringArcTiles"
-				PlayerMechTooltip="@BuildPlayerMechTooltip()"
-				EnemyMechTooltip="@BuildEnemyMechTooltip()"
-				PlayerMuzzleFlash="@PlayerMuzzleFlash"
-				EnemyMuzzleFlash="@EnemyMuzzleFlash"
-				PlayerImpactText="@PlayerImpactText"
-				PlayerImpactDamageText="@PlayerImpactDamageText"
-				PlayerImpactIsHit="@PlayerImpactIsHit"
-				PlayerImpactIsDestruction="@PlayerImpactIsDestruction"
-				EnemyImpactText="@EnemyImpactText"
-				EnemyImpactDamageText="@EnemyImpactDamageText"
-				EnemyImpactIsHit="@EnemyImpactIsHit"
-				EnemyImpactIsDestruction="@EnemyImpactIsDestruction" />
-		</div>
-
-		@if (CurrentMap is not null)
-		{
-			<div class="legend">
-				@foreach (var terrain in CurrentMap.Tiles.Select(tile => tile.Terrain).Distinct().OrderBy(t => t.ToString()))
-				{
-					<span class="legend-item">
-						<span class="legend-swatch" style="background-color:@TerrainCatalog.GetColor(terrain)"></span>
-						@TerrainCatalog.GetLabel(terrain)
-					</span>
-				}
+				<HexMapView
+					Map="CurrentMap"
+					Mech="UserMech"
+					EnemyMech="EnemyMech"
+					PlayerArcTiles="PlayerFiringArcTiles"
+					PlayerMechTooltip="@BuildPlayerMechTooltip()"
+					EnemyMechTooltip="@BuildEnemyMechTooltip()"
+					PlayerMuzzleFlash="@PlayerMuzzleFlash"
+					EnemyMuzzleFlash="@EnemyMuzzleFlash"
+					PlayerImpactText="@PlayerImpactText"
+					PlayerImpactDamageText="@PlayerImpactDamageText"
+					PlayerImpactIsHit="@PlayerImpactIsHit"
+					PlayerImpactIsDestruction="@PlayerImpactIsDestruction"
+					EnemyImpactText="@EnemyImpactText"
+					EnemyImpactDamageText="@EnemyImpactDamageText"
+					EnemyImpactIsHit="@EnemyImpactIsHit"
+					EnemyImpactIsDestruction="@EnemyImpactIsDestruction" />
 			</div>
-		}
 
-		<div class="turn-controls-under-map">
-			<div class="turn-controls-row" role="group" aria-label="Turn controls">
-				@if (!IsGameOver)
-				{
-					<span class="mode-label">Mode:</span>
-					<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Walk)" @onclick="() => TrySetMovementMode(MovementMode.Walk)" title="Walk mode (1 or W)">Walk</button>
-					<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Run)" @onclick="() => TrySetMovementMode(MovementMode.Run)" title="Run mode (2 or R)">Run</button>
-					<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Jump)" @onclick="() => TrySetMovementMode(MovementMode.Jump)" title="Jump mode (3 or J)">Jump</button>
-					<span class="turn-controls-divider"></span>
-					<button class="btn btn-sm turn-btn btn-outline-secondary move-btn" @onclick="() => TryRotate(1)" disabled="@(!IsPlayerPhase || IsGameOver || UserMech is null)" title="Turn left (←)">↺</button>
-					<button class="btn btn-sm turn-btn btn-outline-secondary move-btn" @onclick="() => TryMove(true)" disabled="@(!IsPlayerPhase || IsGameOver || UserMech is null)" title="Move forward (↑)">↑</button>
-					<button class="btn btn-sm turn-btn btn-outline-secondary move-btn" @onclick="() => TryMove(false)" disabled="@(!IsPlayerPhase || IsGameOver || UserMech is null)" title="Move back (↓)">↓</button>
-					<button class="btn btn-sm turn-btn btn-outline-secondary move-btn" @onclick="() => TryRotate(-1)" disabled="@(!IsPlayerPhase || IsGameOver || UserMech is null)" title="Turn right (→)">↻</button>
-					<span class="turn-controls-divider"></span>
-					<button class="btn btn-sm turn-btn btn-danger" @onclick="ResolvePlayerAttack" disabled="@(UserMech is null || EnemyMech is null || !IsPlayerPhase || !CanPlayerFire)" title="Fire weapons (F or Space)">🎯 Fire</button>
-					<button class="btn btn-sm turn-btn btn-outline-secondary" @onclick="EndPlayerTurn" disabled="@(UserMech is null || !IsPlayerPhase)" title="End your turn">End Turn</button>
-					<span class="help-icon" title="← → rotate | ↑ ↓ move | 1/W 2/R 3/J mode | F/Space fire">?</span>
-				}
-				else
-				{
-					<span class="game-over-status @(PlayerWon ? "status-win" : "status-lose")">@(PlayerWon ? "✓ Victory" : "✗ Defeat")</span>
-					<button class="btn btn-sm btn-primary" @onclick="GoToNewGame">New Game</button>
-				}
+			<div class="map-bottom-panel">
+				<div class="mech-control-panel">
+					@if (!IsGameOver)
+					{
+						<div class="control-group mode-group">
+							<span class="mode-label">MODE:</span>
+							<button class="control-btn @GetModeButtonClass(MovementMode.Walk)" @onclick="() => TrySetMovementMode(MovementMode.Walk)" title="Walk mode (1 or W)">WALK</button>
+							<button class="control-btn @GetModeButtonClass(MovementMode.Run)" @onclick="() => TrySetMovementMode(MovementMode.Run)" title="Run mode (2 or R)">RUN</button>
+							<button class="control-btn @GetModeButtonClass(MovementMode.Jump)" @onclick="() => TrySetMovementMode(MovementMode.Jump)" title="Jump mode (3 or J)">JUMP</button>
+						</div>
+						<div class="control-group move-group">
+							<button class="control-btn move-btn" @onclick="() => TryRotate(1)" disabled="@(!IsPlayerPhase || IsGameOver || UserMech is null)" title="Turn left (←)">↺</button>
+							<button class="control-btn move-btn" @onclick="() => TryMove(true)" disabled="@(!IsPlayerPhase || IsGameOver || UserMech is null)" title="Move forward (↑)">↑</button>
+							<button class="control-btn move-btn" @onclick="() => TryMove(false)" disabled="@(!IsPlayerPhase || IsGameOver || UserMech is null)" title="Move back (↓)">↓</button>
+							<button class="control-btn move-btn" @onclick="() => TryRotate(-1)" disabled="@(!IsPlayerPhase || IsGameOver || UserMech is null)" title="Turn right (→)">↻</button>
+						</div>
+						<div class="control-group fire-group">
+							<button class="control-btn fire-btn" @onclick="ResolvePlayerAttack" disabled="@(UserMech is null || EnemyMech is null || !IsPlayerPhase || !CanPlayerFire)" title="Fire weapons (F or Space)">FIRE</button>
+							<button class="control-btn end-btn" @onclick="EndPlayerTurn" disabled="@(UserMech is null || !IsPlayerPhase)" title="End your turn">END TURN</button>
+						</div>
+					}
+					else
+					{
+						<div class="control-group end-game-group">
+							<span class="game-over-status @(PlayerWon ? "status-win" : "status-lose")">@(PlayerWon ? "✓ VICTORY" : "✗ DEFEAT")</span>
+							<button class="control-btn new-game-btn" @onclick="GoToNewGame">NEW GAME</button>
+						</div>
+					}
+				</div>
 			</div>
 		</div>
-	</section>
 
-	<aside class="control-panel">
-
-		<section class="panel-card console-panel">
-			<h3>Console Output</h3>
-			<div class="matrix-console" @ref="ConsoleOutputRef">
+		<aside class="control-panel">
+			<div class="console-divider"></div>
+			<section class="panel-card console-panel">
+				<h3>CONSOLE</h3>
+				<div class="matrix-console" @ref="ConsoleOutputRef">
 				@foreach (var line in CombatLog)
 				{
 					var parsedLine = ParseConsoleLine(line);
@@ -108,6 +96,7 @@
 			</div>
 		</section>
 	</aside>
+	</div>
 </div>
 
 @if (IsGameOver && ShowGameOverOverlay)
@@ -256,13 +245,27 @@
 			UiState.ConsumeGame();
 			GenerateMap();
 			StateHasChanged();
-			await FocusBattlefield();
+			try
+			{
+				await FocusBattlefield();
+			}
+			catch
+			{
+				// Focus is a progressive enhancement and should not break initial page render.
+			}
 		}
 
 		if (ShouldAutoScrollConsole)
 		{
 			ShouldAutoScrollConsole = false;
-			await JsRuntime.InvokeVoidAsync("mechWarUi.scrollElementToBottomIfNearBottom", ConsoleOutputRef, ConsoleAutoScrollThresholdPx);
+			try
+			{
+				await JsRuntime.InvokeVoidAsync("mechWarUi.scrollElementToBottomIfNearBottom", ConsoleOutputRef, ConsoleAutoScrollThresholdPx);
+			}
+			catch
+			{
+				// Console auto-scroll should never interrupt gameplay.
+			}
 		}
 	}
 
@@ -844,29 +847,38 @@
 					{
 						var incomingArc = GetIncomingArc(UserMech.Facing, UserMech.Column, UserMech.Row, enemy.Column, enemy.Row);
 						var hitLocation = RollHitLocation(incomingArc, Roll2d6());
-						ApplyDamage(PlayerSections, hitLocation, enemyWeaponDamage, out var armorDamage, out var internalDamage, out _);
+						ApplyDamage(PlayerSections, hitLocation, enemyWeaponDamage, out var armorDamage, out var internalDamage, out var transferredToCt);
 						var critMsg = string.Empty;
 						if (internalDamage > 0)
 							critMsg = RollCriticalHit(PlayerComponents, hitLocation);
 						var impactDetail = BuildImpactDamageText(hitLocation, armorDamage, internalDamage);
 						await PlayShotAnimation(attackerIsPlayer: false, targetIsPlayer: true, hit: true, impactDetail: impactDetail);
 						RecalculateDurabilityTotals();
+						var finalEnemyAttackMessage = $"Enemy HIT — {weaponLog} fired; rolled {roll} vs TN {targetNumber} ({modBreakdown}). {incomingArc} arc → {FormatLocation(hitLocation)}: {armorDamage} armor / {internalDamage} internal.";
+						if (!string.IsNullOrWhiteSpace(critMsg))
+							finalEnemyAttackMessage += $" {critMsg}";
+						if (transferredToCt > 0)
+							finalEnemyAttackMessage += $" +{transferredToCt} overflow to Center Torso.";
+						if (PlayerInternal <= 0 || PlayerSections[HitLocation.CenterTorso].Internal <= 0 || PlayerSections[HitLocation.Head].Internal <= 0)
+							finalEnemyAttackMessage += " Your mech was destroyed.";
+
 						CheckGameOver();
 						if (IsGameOver)
 						{
+							AddConsoleLine(finalEnemyAttackMessage);
+							_lastActionMessage = finalEnemyAttackMessage;
+							LastEnemyAttackMessage = string.Empty;
 							actions.Add("player destroyed");
 							return string.Join(", ", actions);
 						}
 						actions.Add($"hit ({roll}/{targetNumber})");
-						LastEnemyAttackMessage = $"Enemy HIT — {weaponLog} fired; rolled {roll} vs TN {targetNumber} ({modBreakdown}). {incomingArc} arc → {FormatLocation(hitLocation)}: {armorDamage} armor / {internalDamage} internal.";
-						if (!string.IsNullOrWhiteSpace(critMsg))
-							LastEnemyAttackMessage += $" {critMsg}";
+						LastEnemyAttackMessage = finalEnemyAttackMessage;
 					}
 					else
 					{
 						await PlayShotAnimation(attackerIsPlayer: false, targetIsPlayer: true, hit: false, impactDetail: null);
 						actions.Add($"miss ({roll}/{targetNumber})");
-						LastEnemyAttackMessage = $"Enemy MISS — rolled {roll} vs TN {targetNumber} ({modBreakdown}).";
+						LastEnemyAttackMessage = $"Enemy MISS — {weaponLog} fired; rolled {roll} vs TN {targetNumber} ({modBreakdown}).";
 					}
 					}
 				}
@@ -1637,5 +1649,5 @@
 
 	private readonly record struct Cube(int X, int Y, int Z);
 	private readonly record struct CubeD(double X, double Y, double Z);
-}
 
+}

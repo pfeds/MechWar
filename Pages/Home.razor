@@ -102,14 +102,14 @@
     private static readonly int[] MapWidthPresets  = { 20, 24, 28, 32, 36, 40 };
     private static readonly int[] MapHeightPresets = { 14, 16, 18, 20, 22, 24 };
 
-    private string SelectedThemeKey { get; set; } = string.Empty;
+    private string SelectedThemeKey { get; set; } = "";
     private int Width { get; set; } = 28;
     private int Height { get; set; } = 20;
-    private string SelectedPlayerMechName { get; set; } = string.Empty;
-    private string SelectedEnemyMechName { get; set; } = string.Empty;
+    private string SelectedPlayerMechName { get; set; } = "";
+    private string SelectedEnemyMechName { get; set; } = "";
 
-    private MechDefinition? PlayerDef => MechCatalog.Get(SelectedPlayerMechName);
-    private MechDefinition? EnemyDef => MechCatalog.Get(SelectedEnemyMechName);
+    private MechDefinition? PlayerDef => string.IsNullOrEmpty(SelectedPlayerMechName) ? null : MechCatalog.Get(SelectedPlayerMechName);
+    private MechDefinition? EnemyDef => string.IsNullOrEmpty(SelectedEnemyMechName) ? null : MechCatalog.Get(SelectedEnemyMechName);
 
     private bool IsFormValid => Width >= MinMapWidth && Width <= MaxMapWidth && Height >= MinMapHeight && Height <= MaxMapHeight;
     private string ValidationMessage => $"Map size must be between {MinMapWidth}-{MaxMapWidth} wide and {MinMapHeight}-{MaxMapHeight} high.";
