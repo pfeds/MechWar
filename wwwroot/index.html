@@ -85,6 +85,28 @@
                 }
             };
         })();
+
+        window.mechWarUi = {
+            scrollElementToBottom(element) {
+                if (!element) {
+                    return;
+                }
+
+                element.scrollTop = element.scrollHeight;
+            },
+
+            scrollElementToBottomIfNearBottom(element, thresholdPx) {
+                if (!element) {
+                    return;
+                }
+
+                const threshold = Number.isFinite(thresholdPx) ? thresholdPx : 48;
+                const distanceFromBottom = element.scrollHeight - (element.scrollTop + element.clientHeight);
+                if (distanceFromBottom <= threshold) {
+                    element.scrollTop = element.scrollHeight;
+                }
+            }
+        };
     </script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
 </body>

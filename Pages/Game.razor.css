@@ -1,0 +1,65 @@
+﻿.battlefield-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 23rem;
+    gap: 1rem;
+    align-items: stretch;
+}
+.map-column { min-width: 0; display: flex; flex-direction: column; }
+.map-meta { margin-bottom: 0.5rem; color: #3a3f4a; }
+.panel-card { background: #ffffff; border: 1px solid #d6dce5; border-radius: 0.65rem; padding: 0.7rem; display: flex; flex-direction: column; }
+.panel-card h3 { margin: 0 0 0.55rem 0; font-size: 0.95rem; font-weight: 700; color: #2e3a4a; text-transform: uppercase; letter-spacing: 0.04em; }
+.turn-controls-under-map { margin-top: 0.7rem; display: flex; justify-content: center; }
+.turn-controls-row { display: flex; align-items: center; justify-content: center; gap: 0.45rem; flex-wrap: nowrap; overflow-x: auto; padding: 0.2rem 0.35rem; }
+.help-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.15rem; height: 1.15rem; border-radius: 999px; border: 1px solid #6b778a; color: #384152; font-size: 0.74rem; font-weight: 700; cursor: help; background: #f7f9fc; }
+.turn-btn { padding: 0.14rem 0.4rem; font-size: 0.72rem; line-height: 1.2; }
+.mode-label { font-weight: 600; color: #3a3f4a; }
+.control-panel {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+}
+
+.console-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.matrix-console {
+    background: #040b04;
+    border: 1px solid #1d451d;
+    border-radius: 0.45rem;
+    padding: 0.45rem;
+    flex: 1;
+    overflow-y: auto;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 0.72rem;
+    line-height: 1.25;
+    color: #49e349;
+}
+.matrix-console div { white-space: pre-wrap; margin-bottom: 0.2rem; }
+.matrix-console .log-hit { color: #ff9f1a; }
+.matrix-console .log-miss { color: #888888; }
+.matrix-console .log-destruction { color: #ff2c2c; animation: logDestructionFlash 0.9s ease-in-out infinite alternate; }
+.matrix-console .log-round { color: #49e349; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.matrix-console .log-prefix-enemy { color: #ff4d4d !important; font-weight: 700; }
+.matrix-console .log-prefix-allied { color: #4da3ff !important; font-weight: 700; }
+@keyframes logDestructionFlash { from { color: #ff2c2c; } to { color: #ff9090; } }
+.legend { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.legend-item { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.45rem; border: 1px solid #ddd; border-radius: 0.5rem; background: #fff; }
+.legend-swatch { width: 0.9rem; height: 0.9rem; border-radius: 0.15rem; border: 1px solid #777; }
+.battlefield-input { border-radius: 10px; outline: none; }
+.battlefield-input:focus-visible { box-shadow: 0 0 0 0.22rem rgba(37, 140, 251, 0.35); }
+.game-over-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.game-over-content { text-align: center; background: linear-gradient(135deg, #000 0%, #1a1a1a 100%); border: 3px solid #00ff00; padding: 3rem 4rem; box-shadow: 0 0 40px rgba(0,255,0,0.5), inset 0 0 20px rgba(0,255,0,0.1); }
+.game-over-text { font-family: 'Courier New', monospace; font-size: 4rem; font-weight: bold; color: #00ff00; text-shadow: 0 0 20px #00ff00, 0 0 40px #00aa00; margin: 0; letter-spacing: 4px; animation: flicker 0.15s infinite; }
+@keyframes flicker { 0%, 100% { text-shadow: 0 0 20px #00ff00, 0 0 40px #00aa00; } 50% { text-shadow: 0 0 10px #00ff00, 0 0 20px #00aa00; } }
+.game-result { font-family: 'Courier New', monospace; font-size: 2.5rem; font-weight: bold; margin: 1.5rem 0 0 0; text-shadow: 0 0 10px currentColor; letter-spacing: 2px; }
+.game-result.win { color: #00ff00; text-shadow: 0 0 15px #00ff00, 0 0 30px #00aa00; }
+.game-result.lose { color: #ff0000; text-shadow: 0 0 15px #ff0000, 0 0 30px #aa0000; }
+.game-over-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+.game-over-status { font-weight: 700; font-size: 0.8rem; letter-spacing: 0.06em; padding: 0.15rem 0.5rem; border-radius: 0.35rem; }
+.status-win { color: #00bb00; background: #e8ffe8; border: 1px solid #00bb00; }
+.status-lose { color: #cc0000; background: #ffe8e8; border: 1px solid #cc0000; }
+@media (max-width: 900px) { .battlefield-layout { grid-template-columns: 1fr; } .control-panel { max-height: none; } }
