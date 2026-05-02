@@ -6,6 +6,7 @@
 @using Microsoft.AspNetCore.Components.Web
 @inject IMapGenerator MapGenerator
 @inject GameUiState UiState
+@inject IJSRuntime JsRuntime
 @implements IDisposable
 
 <PageTitle>MechWar</PageTitle>
@@ -490,9 +491,10 @@
 		EnemyImpactIsDestruction = false;   // NEW: Reset destruction flag
 	}
 
-	private async Task PlayShotAnimation(bool attackerIsPlayer, bool targetIsPlayer, bool hit, int damage)
+	private async Task PlayShotAnimation(bool attackerIsPlayer, bool targetIsPlayer, bool hit, string? impactDetail)
 	{
 		ClearCombatFx();
+		await PlayCombatSoundAsync("fire");
 		if (attackerIsPlayer)
 		{
 			PlayerMuzzleFlash = true;
@@ -508,16 +510,21 @@
 		PlayerMuzzleFlash = false;
 		EnemyMuzzleFlash = false;
 
+		if (hit)
+		{
+			await PlayCombatSoundAsync("hit");
+		}
+
 		if (targetIsPlayer)
 		{
 			PlayerImpactText = hit ? "Hit!" : "Miss";
-			PlayerImpactDamageText = hit && damage > 0 ? $"{damage} dmg" : null;
+			PlayerImpactDamageText = hit ? impactDetail : null;
 			PlayerImpactIsHit = hit;
 		}
 		else
 		{
 			EnemyImpactText = hit ? "Hit!" : "Miss";
-			EnemyImpactDamageText = hit && damage > 0 ? $"{damage} dmg" : null;
+			EnemyImpactDamageText = hit ? impactDetail : null;
 			EnemyImpactIsHit = hit;
 		}
 
@@ -525,6 +532,30 @@
 		await Task.Delay(620);
 		ClearCombatFx();
 		await InvokeAsync(StateHasChanged);
+	}
+
+	private async Task PlayCombatSoundAsync(string soundName)
+	{
+		try
+		{
+			await JsRuntime.InvokeVoidAsync("mechWarAudio.play", soundName);
+		}
+		catch
+		{
+			// Audio should never interrupt combat flow.
+		}
+	}
+
+	private static string BuildImpactDamageText(HitLocation location, int armorDamage, int internalDamage)
+	{
+		var locationText = FormatLocation(location);
+		return (armorDamage, internalDamage) switch
+		{
+			(> 0, > 0) => $"{locationText} hit for {armorDamage} armour and {internalDamage} internal damage!",
+			(> 0, 0) => $"{locationText} hit for {armorDamage} armour damage!",
+			(0, > 0) => $"{locationText} hit for {internalDamage} internal damage!",
+			_ => $"{locationText} hit!"
+		};
 	}
 
 	private async Task AnimateAiStep(int delayMs)
@@ -785,7 +816,7 @@
 
 		if (roll < targetNumber)
 		{
-			await PlayShotAnimation(attackerIsPlayer: true, targetIsPlayer: false, hit: false, damage: 0);
+			await PlayShotAnimation(attackerIsPlayer: true, targetIsPlayer: false, hit: false, impactDetail: null);
 			LastActionMessage = $"MISS — rolled {roll} vs TN {targetNumber} ({modBreakdown}).";
 			return;
 		}
@@ -798,7 +829,8 @@
 		{
 			criticalHitMsg = RollCriticalHit(EnemyComponents, hitLocation);
 		}
-		await PlayShotAnimation(attackerIsPlayer: true, targetIsPlayer: false, hit: true, damage: armorDamage + internalDamage);
+		var impactDetail = BuildImpactDamageText(hitLocation, armorDamage, internalDamage);
+		await PlayShotAnimation(attackerIsPlayer: true, targetIsPlayer: false, hit: true, impactDetail: impactDetail);
 		RecalculateDurabilityTotals();
 		LastActionMessage = $"HIT — rolled {roll} vs TN {targetNumber} ({modBreakdown}). {enemyArc} arc → {FormatLocation(hitLocation)}: {armorDamage} armor / {internalDamage} internal.";
 		if (!string.IsNullOrWhiteSpace(criticalHitMsg))
@@ -1002,7 +1034,7 @@
 			var targetNumber = BaseToHit + rangeModifier + enemyAttackerModifier + playerTargetModifier + heatModifier + enemyGyroModifier + enemyTerrainModifier;
 			var roll = Roll2d6();
 			var modBreakdown = FormatModifierBreakdown(BaseToHit, rangeModifier, enemyAttackerModifier, playerTargetModifier, heatModifier, enemyGyroModifier, enemyTerrainModifier);
-			if (roll >= targetNumber)
+				if (roll >= targetNumber)
 			{
 				var incomingArc = GetIncomingArc(UserMech.Facing, UserMech.Column, UserMech.Row, enemy.Column, enemy.Row);
 				var hitLocation = RollHitLocation(incomingArc, Roll2d6());
@@ -1012,7 +1044,8 @@
 				{
 					critMsg = RollCriticalHit(PlayerComponents, hitLocation);
 				}
-				await PlayShotAnimation(attackerIsPlayer: false, targetIsPlayer: true, hit: true, damage: armorDamage + internalDamage);
+					var impactDetail = BuildImpactDamageText(hitLocation, armorDamage, internalDamage);
+					await PlayShotAnimation(attackerIsPlayer: false, targetIsPlayer: true, hit: true, impactDetail: impactDetail);
 				RecalculateDurabilityTotals();
 				actions.Add($"hit ({roll}/{targetNumber})");
 				LastEnemyAttackMessage = $"Enemy HIT — rolled {roll} vs TN {targetNumber} ({modBreakdown}). {incomingArc} arc → {FormatLocation(hitLocation)}: {armorDamage} armor / {internalDamage} internal.";
@@ -1023,7 +1056,7 @@
 			}
 			else
 			{
-				await PlayShotAnimation(attackerIsPlayer: false, targetIsPlayer: true, hit: false, damage: 0);
+					await PlayShotAnimation(attackerIsPlayer: false, targetIsPlayer: true, hit: false, impactDetail: null);
 				actions.Add($"miss ({roll}/{targetNumber})");
 				LastEnemyAttackMessage = $"Enemy MISS — rolled {roll} vs TN {targetNumber} ({modBreakdown}).";
 			}

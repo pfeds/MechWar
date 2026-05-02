@@ -142,12 +142,13 @@
 }
 
 .impact-damage {
-    font-size: 6.3px;
+    font-size: 4.6px;
     fill: #ffd0d0;
     stroke: #361111;
-    stroke-width: 0.55px;  /* Adjusted for larger size */
+    stroke-width: 0.45px;
     paint-order: stroke;
     font-weight: 700;
+    letter-spacing: 0.08px;
 }
 
 @keyframes flashPulse {
