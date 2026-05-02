@@ -352,24 +352,25 @@
 
 .lobby-card {
     width: min(56rem, 100%);
-    background: #ffffff;
-    border: 1px solid #d6dce5;
+    background: linear-gradient(180deg, #101610 0%, #171f17 100%);
+    border: 1px solid #1d451d;
     border-radius: 1rem;
     padding: 2rem 2.5rem;
-    box-shadow: 0 8px 32px rgba(20, 32, 56, 0.12);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28), 0 0 18px rgba(73, 227, 73, 0.08);
 }
 
 .lobby-title {
     font-family: 'Courier New', monospace;
     font-size: 2.4rem;
     font-weight: 900;
-    color: #1a2740;
+    color: #49e349;
     margin: 0 0 0.25rem 0;
     letter-spacing: 0.08em;
+    text-shadow: 0 0 10px rgba(73, 227, 73, 0.35);
 }
 
 .lobby-subtitle {
-    color: #4a5668;
+    color: #a8c7a8;
     margin: 0 0 1.8rem 0;
     font-size: 0.95rem;
 }
@@ -385,7 +386,7 @@
     align-items: center;
     gap: 0.5rem;
     margin: 0 0 0.6rem 0;
-    border-bottom: 1px solid #e5eaf2;
+    border-bottom: 1px solid #274127;
     padding-bottom: 0.3rem;
 }
 
@@ -406,9 +407,9 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.07em;
-    color: #64748b;
+    color: #7ebcff;
     margin: 0 0 0.6rem 0;
-    border-bottom: 1px solid #e5eaf2;
+    border-bottom: 1px solid #274127;
     padding-bottom: 0.3rem;
 }
 
@@ -429,13 +430,13 @@
 
 .lobby-field label {
     font-size: 0.82rem;
-    color: #4a5668;
+    color: #d2e7d2;
     font-weight: 500;
 }
 
 .mech-hint {
     font-size: 0.75rem;
-    color: #64748b;
+    color: #97b597;
     font-style: italic;
 }
 
@@ -450,7 +451,7 @@
 .vs-label {
     font-size: 1.1rem;
     font-weight: 900;
-    color: #94a3b8;
+    color: #7ebcff;
     letter-spacing: 0.12em;
 }
 
@@ -461,9 +462,35 @@
 }
 
 .lobby-spawn-preview {
-    color: #64748b;
+    color: #a8c7a8;
     font-size: 0.8rem;
     margin: 0.4rem 0 0 0;
+}
+
+.lobby-card ::deep .form-control,
+.lobby-card ::deep .form-select {
+  background: #0f140f;
+  color: #e3f3e3;
+  border: 1px solid #2f5a2f;
+  box-shadow: none;
+}
+
+.lobby-card ::deep .form-control::placeholder,
+.lobby-card ::deep .form-select::placeholder {
+  color: #87a187;
+}
+
+.lobby-card ::deep .form-control:focus,
+.lobby-card ::deep .form-select:focus {
+  background: #111811;
+  color: #f0fff0;
+  border-color: #49e349;
+  box-shadow: 0 0 0 0.18rem rgba(73, 227, 73, 0.18);
+}
+
+.lobby-card ::deep option {
+  background: #101610;
+  color: #e3f3e3;
 }
 
 .lobby-actions {

@@ -16,13 +16,13 @@ main {
 }
 
 .top-bar {
-    background: #ffffff;
-    border-bottom: 1px solid #d6dce5;
+    background: linear-gradient(180deg, #0b0f0b 0%, #121812 100%);
+    border-bottom: 1px solid #1d451d;
     padding: 0.8rem 1.5rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    box-shadow: 0 2px 4px rgba(20, 32, 56, 0.08);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.32);
     flex-shrink: 0;
     width: 100%;
     height: auto;
@@ -38,16 +38,41 @@ main {
     font-family: 'Courier New', monospace;
     font-size: 1.8rem;
     font-weight: 900;
-    color: #1a2740;
+    color: #49e349;
     margin: 0;
     letter-spacing: 0.08em;
     white-space: nowrap;
+    text-shadow: 0 0 10px rgba(73, 227, 73, 0.35);
 }
 
 .top-bar-right {
     display: flex;
     align-items: center;
     flex: 0 0 auto;
+}
+
+.top-bar-right ::deep .top-nav {
+  display: flex;
+  align-items: center;
+}
+
+.top-bar-right ::deep .top-nav-link {
+  color: #7ebcff;
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #2d5f2d;
+  border-radius: 4px;
+  background: rgba(11, 24, 11, 0.7);
+  transition: all 0.2s ease;
+}
+
+.top-bar-right ::deep .top-nav-link:hover {
+  color: #49e349;
+  border-color: #49e349;
+  background: rgba(29, 69, 29, 0.45);
+  box-shadow: 0 0 8px rgba(73, 227, 73, 0.25);
 }
 
 .sidebar {

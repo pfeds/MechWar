@@ -626,7 +626,7 @@
 
 		var enemyArc = GetIncomingArc(EnemyMech.Facing, EnemyMech.Column, EnemyMech.Row, UserMech.Column, UserMech.Row);
 		var hitLocation = RollHitLocation(enemyArc, Roll2d6());
-		ApplyDamage(EnemySections, hitLocation, weaponDamage, out var armorDamage, out var internalDamage, out var transferredToCt);
+		ApplyDamage(EnemySections, hitLocation, weaponDamage, out var armorDamage, out var internalDamage, out var transferredToCt, out var damageTransferDetail);
 		var criticalHitMsg = string.Empty;
 		if (internalDamage > 0)
 			criticalHitMsg = RollCriticalHit(EnemyComponents, hitLocation);
@@ -639,7 +639,9 @@
 		if (!string.IsNullOrWhiteSpace(criticalHitMsg))
 			finalPlayerAttackMessage += $" {criticalHitMsg}";
 		if (transferredToCt > 0)
-			finalPlayerAttackMessage += $" +{transferredToCt} overflow to Center Torso.";
+			finalPlayerAttackMessage += $" +{transferredToCt} to CT.";
+		if (!string.IsNullOrWhiteSpace(damageTransferDetail))
+			finalPlayerAttackMessage += $" {damageTransferDetail}";
 
 		if (EnemyInternal <= 0)
 			finalPlayerAttackMessage += " Enemy mech destroyed.";
@@ -847,7 +849,7 @@
 					{
 						var incomingArc = GetIncomingArc(UserMech.Facing, UserMech.Column, UserMech.Row, enemy.Column, enemy.Row);
 						var hitLocation = RollHitLocation(incomingArc, Roll2d6());
-						ApplyDamage(PlayerSections, hitLocation, enemyWeaponDamage, out var armorDamage, out var internalDamage, out var transferredToCt);
+						ApplyDamage(PlayerSections, hitLocation, enemyWeaponDamage, out var armorDamage, out var internalDamage, out var transferredToCt, out var damageTransferDetail);
 						var critMsg = string.Empty;
 						if (internalDamage > 0)
 							critMsg = RollCriticalHit(PlayerComponents, hitLocation);
@@ -858,7 +860,9 @@
 						if (!string.IsNullOrWhiteSpace(critMsg))
 							finalEnemyAttackMessage += $" {critMsg}";
 						if (transferredToCt > 0)
-							finalEnemyAttackMessage += $" +{transferredToCt} overflow to Center Torso.";
+							finalEnemyAttackMessage += $" +{transferredToCt} to CT.";
+						if (!string.IsNullOrWhiteSpace(damageTransferDetail))
+							finalEnemyAttackMessage += $" {damageTransferDetail}";
 						if (PlayerInternal <= 0 || PlayerSections[HitLocation.CenterTorso].Internal <= 0 || PlayerSections[HitLocation.Head].Internal <= 0)
 							finalEnemyAttackMessage += " Your mech was destroyed.";
 
@@ -1143,23 +1147,148 @@
 		HitLocation.LeftArm => "Left Arm", HitLocation.RightArm => "Right Arm", HitLocation.LeftLeg => "Left Leg", HitLocation.RightLeg => "Right Leg", _ => "Head"
 	};
 
-	private static void ApplyDamage(Dictionary<HitLocation, SectionState> sections, HitLocation location, int damage, out int armorDamage, out int internalDamage, out int transferredToCenterTorso)
+	private static string FormatLocationShort(HitLocation location) => location switch
 	{
-		armorDamage = 0; internalDamage = 0; transferredToCenterTorso = 0;
-		if (!sections.TryGetValue(location, out var section)) return;
-		armorDamage = Math.Min(section.Armor, damage);
-		var remaining = damage - armorDamage;
-		var updatedArmor = section.Armor - armorDamage;
-		internalDamage = Math.Min(section.Internal, remaining);
-		remaining -= internalDamage;
-		sections[location] = section with { Armor = updatedArmor, Internal = section.Internal - internalDamage };
-		if (remaining > 0 && location != HitLocation.CenterTorso && sections.TryGetValue(HitLocation.CenterTorso, out var ct))
+		HitLocation.Head => "HD",
+		HitLocation.CenterTorso => "CT",
+		HitLocation.LeftTorso => "LT",
+		HitLocation.RightTorso => "RT",
+		HitLocation.LeftArm => "LA",
+		HitLocation.RightArm => "RA",
+		HitLocation.LeftLeg => "LL",
+		HitLocation.RightLeg => "RL",
+		_ => "??"
+	};
+
+	private static void ApplyDamage(Dictionary<HitLocation, SectionState> sections, HitLocation location, int damage, out int armorDamage, out int internalDamage, out int transferredToCenterTorso, out string damageDetail)
+	{
+		armorDamage = 0;
+		internalDamage = 0;
+		transferredToCenterTorso = 0;
+		damageDetail = string.Empty;
+		if (damage <= 0)
+			return;
+
+		var detailParts = new List<string>();
+		var remaining = damage;
+		var currentLocation = location;
+
+		while (remaining > 0)
 		{
-			var ctDamage = Math.Min(ct.Internal, remaining);
-			sections[HitLocation.CenterTorso] = ct with { Internal = ct.Internal - ctDamage };
-			internalDamage += ctDamage;
-			transferredToCenterTorso = ctDamage;
+			if (!sections.TryGetValue(currentLocation, out var section))
+				break;
+
+			if (section.Internal <= 0)
+			{
+				var nextDestroyedTransfer = GetDamageTransferLocation(currentLocation);
+				if (nextDestroyedTransfer is null)
+					break;
+				AddDamageTransferDetail(detailParts, currentLocation, nextDestroyedTransfer.Value);
+				currentLocation = nextDestroyedTransfer.Value;
+				continue;
+			}
+
+			var sectionArmor = Math.Max(0, section.Armor);
+			var sectionInternal = Math.Max(0, section.Internal);
+
+			var armorHit = Math.Min(sectionArmor, remaining);
+			remaining -= armorHit;
+
+			var internalHit = Math.Min(sectionInternal, remaining);
+			remaining -= internalHit;
+
+			sections[currentLocation] = section with
+			{
+				Armor = sectionArmor - armorHit,
+				Internal = sectionInternal - internalHit
+			};
+
+			if (currentLocation == location)
+			{
+				armorDamage += armorHit;
+				internalDamage += internalHit;
+			}
+			else if (currentLocation == HitLocation.CenterTorso)
+			{
+				transferredToCenterTorso += armorHit + internalHit;
+			}
+
+			if (sectionInternal - internalHit <= 0)
+			{
+				AddDamageDetail(detailParts, HandleSectionDestroyed(sections, currentLocation));
+			}
+
+			if (remaining <= 0)
+				break;
+
+			var nextTransfer = GetDamageTransferLocation(currentLocation);
+			if (nextTransfer is null)
+				break;
+
+			AddDamageTransferDetail(detailParts, currentLocation, nextTransfer.Value);
+			currentLocation = nextTransfer.Value;
 		}
+
+		damageDetail = detailParts.Count == 0 ? string.Empty : string.Join(" ", detailParts);
+	}
+
+	private static HitLocation? GetDamageTransferLocation(HitLocation location) => location switch
+	{
+		HitLocation.LeftArm => HitLocation.LeftTorso,
+		HitLocation.RightArm => HitLocation.RightTorso,
+		HitLocation.LeftLeg => HitLocation.LeftTorso,
+		HitLocation.RightLeg => HitLocation.RightTorso,
+		HitLocation.LeftTorso => HitLocation.CenterTorso,
+		HitLocation.RightTorso => HitLocation.CenterTorso,
+		HitLocation.Head => HitLocation.CenterTorso,
+		HitLocation.CenterTorso => null,
+		_ => HitLocation.CenterTorso
+	};
+
+	private static string HandleSectionDestroyed(Dictionary<HitLocation, SectionState> sections, HitLocation location)
+	{
+		switch (location)
+		{
+			case HitLocation.LeftTorso:
+				DestroySection(sections, HitLocation.LeftArm);
+				return "LT destroyed; LA lost.";
+			case HitLocation.RightTorso:
+				DestroySection(sections, HitLocation.RightArm);
+				return "RT destroyed; RA lost.";
+			case HitLocation.LeftArm:
+				return "LA destroyed.";
+			case HitLocation.RightArm:
+				return "RA destroyed.";
+			case HitLocation.LeftLeg:
+				return "LL destroyed.";
+			case HitLocation.RightLeg:
+				return "RL destroyed.";
+			case HitLocation.Head:
+				return "HD destroyed.";
+			case HitLocation.CenterTorso:
+				return "CT destroyed.";
+		}
+
+		return string.Empty;
+	}
+
+	private static void AddDamageTransferDetail(List<string> detailParts, HitLocation from, HitLocation to) =>
+		AddDamageDetail(detailParts, $"{FormatLocationShort(from)}→{FormatLocationShort(to)}.");
+
+	private static void AddDamageDetail(List<string> detailParts, string detail)
+	{
+		if (string.IsNullOrWhiteSpace(detail) || detailParts.Contains(detail))
+			return;
+
+		detailParts.Add(detail);
+	}
+
+	private static void DestroySection(Dictionary<HitLocation, SectionState> sections, HitLocation location)
+	{
+		if (!sections.TryGetValue(location, out var section))
+			return;
+
+		sections[location] = section with { Armor = 0, Internal = 0 };
 	}
 
 	private void ApplyHeatEndPhase(bool isPlayer)
@@ -1170,7 +1299,7 @@
 			if (PlayerAmmoIntact && PlayerHeat >= 19 && Roll2d6() <= 4)
 			{
 				PlayerAmmoIntact = false;
-				ApplyDamage(PlayerSections, HitLocation.CenterTorso, 10, out _, out _, out _);
+				ApplyDamage(PlayerSections, HitLocation.CenterTorso, 10, out _, out _, out _, out _);
 				RecalculateDurabilityTotals();
 				LastActionMessage = "Ammo explosion! Player center torso takes critical damage.";
 			}
@@ -1182,7 +1311,7 @@
 		if (EnemyAmmoIntact && EnemyHeat >= 19 && Roll2d6() <= 4)
 		{
 			EnemyAmmoIntact = false;
-			ApplyDamage(EnemySections, HitLocation.CenterTorso, 10, out _, out _, out _);
+			ApplyDamage(EnemySections, HitLocation.CenterTorso, 10, out _, out _, out _, out _);
 			RecalculateDurabilityTotals();
 			LastEnemyAttackMessage = "Enemy ammo explosion damages its center torso.";
 		}

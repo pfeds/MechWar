@@ -130,8 +130,6 @@
     private void RandomiseBattlefield()
     {
         SelectedThemeKey = ThemeCatalog.All[Random.Shared.Next(ThemeCatalog.All.Count)].Key;
-        Width  = MapWidthPresets[Random.Shared.Next(MapWidthPresets.Length)];
-        Height = MapHeightPresets[Random.Shared.Next(MapHeightPresets.Length)];
     }
 
     private void RandomiseCombatants()
