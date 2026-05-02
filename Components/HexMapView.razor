@@ -581,20 +581,54 @@ else
     {
         return builder =>
         {
-            var parts = line.Split(new[] { "~~" }, StringSplitOptions.None);
-            for (var i = 0; i < parts.Length; i++)
+            var sequence = 0;
+            var index = 0;
+
+            while (index < line.Length)
             {
-                if (i % 2 == 0)
+                if (index + 1 < line.Length && line[index] == '~' && line[index + 1] == '~')
                 {
-                    builder.AddContent(i, parts[i]);
+                    var close = line.IndexOf("~~", index + 2, StringComparison.Ordinal);
+                    if (close > index)
+                    {
+                        var struckText = line.Substring(index + 2, close - (index + 2));
+                        builder.OpenElement(sequence++, "span");
+                        builder.AddAttribute(sequence++, "class", "destroyed-weapon");
+                        builder.AddContent(sequence++, struckText);
+                        builder.CloseElement();
+                        index = close + 2;
+                        continue;
+                    }
                 }
-                else
+
+                if (index + 1 < line.Length && line[index] == '{' && line[index + 1] == '{')
                 {
-                    builder.OpenElement(i, "span");
-                    builder.AddAttribute(i + 1, "class", "destroyed-weapon");
-                    builder.AddContent(i + 2, parts[i]);
-                    builder.CloseElement();
+                    var separator = line.IndexOf('|', index + 2);
+                    var close = line.IndexOf("}}", index + 2, StringComparison.Ordinal);
+                    if (separator > index && close > separator)
+                    {
+                        var cssClass = line.Substring(index + 2, separator - (index + 2));
+                        var tokenText = line.Substring(separator + 1, close - (separator + 1));
+                        builder.OpenElement(sequence++, "span");
+                        builder.AddAttribute(sequence++, "class", cssClass);
+                        builder.AddContent(sequence++, tokenText);
+                        builder.CloseElement();
+                        index = close + 2;
+                        continue;
+                    }
                 }
+
+                var nextStrike = line.IndexOf("~~", index, StringComparison.Ordinal);
+                var nextToken = line.IndexOf("{{", index, StringComparison.Ordinal);
+                var nextMarker = nextStrike switch
+                {
+                    -1 => nextToken,
+                    _ when nextToken == -1 => nextStrike,
+                    _ => Math.Min(nextStrike, nextToken)
+                };
+                var plainEnd = nextMarker == -1 ? line.Length : nextMarker;
+                builder.AddContent(sequence++, line.Substring(index, plainEnd - index));
+                index = plainEnd;
             }
         };
     }

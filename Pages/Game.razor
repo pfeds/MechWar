@@ -1256,12 +1256,14 @@
 	{
 		TileByCoordinate.TryGetValue((mech.Column, mech.Row), out var occupiedTile);
 		var terrainContext = occupiedTile is null ? "Unknown" : BuildTileContext(occupiedTile);
+		var mechTonnage = GetMechTonnage(mech.MechName);
+		var heatBar = BuildHeatRetroBar(heat);
 		var lines = new List<string>
 		{
-			$"{title} {mech.MechName}",
+			$"{title} {mech.MechName} [{mechTonnage}t]",
 			$"Facing: {mech.Facing} | Hex: ({mech.Column}, {mech.Row}) {terrainContext}",
 			$"Mode: {mode} | Movement: {mech.RemainingMovement}/{mech.MaxMovement}",
-			$"Heat: {heat} | Status: {(shutdown ? "Shutdown" : "Online")} | Ammo: {(ammoIntact ? "Safe" : "Exploded")}",
+			$"Heat: {BuildStateBarToken(heatBar, GetHeatStateClass(heat))} {Math.Max(0, heat)}/{HeatBarMax} | Status: {(shutdown ? "Shutdown" : "Online")} | Ammo: {(ammoIntact ? "Safe" : "Exploded")}",
 			"Sections (Armour / Internal):"
 		};
 
@@ -1273,7 +1275,11 @@
 			var internalPercent = GetPercent(Math.Max(0, current.Internal), maxSection.Internal);
 			var armorBar = BuildRetroBar(armorPercent);
 			var internalBar = BuildRetroBar(internalPercent);
-			lines.Add($"- {GetShortLocationLabel(location),-8} A {armorBar} {armorPercent,3}% | I {internalBar} {internalPercent,3}%");
+			var armorValue = FormatRemainingOverTotal(current.Armor, maxSection.Armor);
+			var internalValue = FormatRemainingOverTotal(current.Internal, maxSection.Internal);
+			var armorBarToken = BuildStateBarToken(armorBar, GetDurabilityStateClass(armorPercent));
+			var internalBarToken = BuildStateBarToken(internalBar, GetDurabilityStateClass(internalPercent));
+			lines.Add($"- {GetShortLocationLabel(location),-8} A {armorBarToken} {armorValue,7} | I {internalBarToken} {internalValue,7}");
 		}
 
 		var criticalLines = new List<string>();
@@ -1336,6 +1342,41 @@
 
 	private static int GetPercent(int current, int max) =>
 		max <= 0 ? 0 : Math.Clamp((int)Math.Round((current / (double)max) * 100), 0, 100);
+
+	private const int HeatBarMax = 30;
+
+	private static int GetMechTonnage(string mechName) => MechCatalog.Get(mechName)?.Tonnage ?? 0;
+
+	private static string BuildHeatRetroBar(int heat)
+	{
+		var normalizedHeat = Math.Clamp(heat, 0, HeatBarMax);
+		var heatPercent = GetPercent(normalizedHeat, HeatBarMax);
+		return BuildRetroBar(heatPercent);
+	}
+
+	private static string BuildStateBarToken(string barText, string cssClass) => $"{{{{{cssClass}|{barText}}}}}";
+
+	private static string GetHeatStateClass(int heat)
+	{
+		var normalizedHeat = Math.Clamp(heat, 0, HeatBarMax);
+		var heatPercent = GetPercent(normalizedHeat, HeatBarMax);
+		return heatPercent switch
+		{
+			>= 67 => "bar-heat-crit",
+			>= 34 => "bar-heat-warn",
+			_ => "bar-heat-ok"
+		};
+	}
+
+	private static string GetDurabilityStateClass(int durabilityPercent) => durabilityPercent switch
+	{
+		>= 67 => "bar-dmg-ok",
+		>= 34 => "bar-dmg-warn",
+		_ => "bar-dmg-crit"
+	};
+
+	private static string FormatRemainingOverTotal(int current, int max) =>
+		$"{Math.Max(0, current)}/{Math.Max(0, max)}";
 
 	private static string BuildRetroBar(int percent)
 	{

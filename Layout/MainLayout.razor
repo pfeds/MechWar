@@ -1,4 +1,5 @@
 ﻿@inherits LayoutComponentBase
+@inject NavigationManager Nav
 <div class="page">
     <header class="top-bar">
         <div class="top-bar-left">
@@ -9,8 +10,18 @@
         </div>
     </header>
     <main>
-        <article class="content">
+        <article class="@GetContentClass()">
             @Body
         </article>
     </main>
 </div>
+
+@code {
+    private string GetContentClass() => IsGameRoute() ? "content content-game" : "content";
+
+    private bool IsGameRoute()
+    {
+        var relativePath = Nav.ToBaseRelativePath(Nav.Uri).Trim('/');
+        return string.Equals(relativePath, "game", StringComparison.OrdinalIgnoreCase);
+    }
+}

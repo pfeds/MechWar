@@ -97,6 +97,36 @@
     color: #49e349;
 }
 
+.bar-heat-ok {
+    color: #49e349;
+    font-weight: 700;
+}
+
+.bar-heat-warn {
+    color: #ffb84d;
+    font-weight: 700;
+}
+
+.bar-heat-crit {
+    color: #ff5a5a;
+    font-weight: 700;
+}
+
+.bar-dmg-ok {
+    color: #49e349;
+    font-weight: 700;
+}
+
+.bar-dmg-warn {
+    color: #ffb84d;
+    font-weight: 700;
+}
+
+.bar-dmg-crit {
+    color: #ff5a5a;
+    font-weight: 700;
+}
+
 .destroyed-weapon {
     color: #ff4d4d;
     text-decoration: line-through;

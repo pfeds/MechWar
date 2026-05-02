@@ -80,7 +80,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) 300px;
     gap: 0.8rem;
-    padding: 0.8rem;
+    padding: 0;
     flex: 1;
     min-height: 0;
     overflow: hidden;
@@ -525,12 +525,12 @@
 
 @media (max-width: 800px) {
     .battlefield-container {
-        padding: 0.5rem;
+        padding: 0;
     }
 
     .battlefield-main {
         gap: 0.5rem;
-        padding: 0.5rem;
+        padding: 0;
     }
 
     .map-wrapper {
