@@ -127,14 +127,24 @@
 					<label for="height">Height</label>
 					<input id="height" class="form-control form-control-sm" type="number" min="@MinMapHeight" max="@MaxMapHeight" @bind="Height" />
 				</div>
-				<div class="control-group">
-					<label for="mechClass">Player Mech Class</label>
-					<select id="mechClass" class="form-select form-select-sm" @bind="SelectedMechClass">
-						<option value="@MechClass.Light">Light</option>
-						<option value="@MechClass.Medium">Medium</option>
-						<option value="@MechClass.Heavy">Heavy</option>
-					</select>
-				</div>
+							<div class="control-group">
+								<label for="playerMech">Player Mech</label>
+								<select id="playerMech" class="form-select form-select-sm" @bind="SelectedPlayerMechName">
+									@foreach (var mechName in MechCatalog.AllMechNames)
+									{
+										<option value="@mechName">@mechName</option>
+									}
+								</select>
+							</div>
+							<div class="control-group">
+								<label for="enemyMech">Enemy Mech</label>
+								<select id="enemyMech" class="form-select form-select-sm" @bind="SelectedEnemyMechName">
+									@foreach (var mechName in MechCatalog.AllMechNames)
+									{
+										<option value="@mechName">@mechName</option>
+									}
+								</select>
+							</div>
 			</div>
 			@if (!IsCreateGameFormValid)
 			{
@@ -176,7 +186,6 @@
 	private string SelectedThemeKey { get; set; } = ThemeCatalog.All[0].Key;
 	private int Width { get; set; } = 28;
 	private int Height { get; set; } = 20;
-	private MechClass SelectedMechClass { get; set; } = MechClass.Medium;
 	private MovementMode ActiveMovementMode { get; set; } = MovementMode.Walk;
 	private int CurrentSeed { get; set; } = Random.Shared.Next(100_000, 999_999);
 	private HexMap? CurrentMap { get; set; }
@@ -258,35 +267,10 @@
 		}
 	}
 
+	private string SelectedPlayerMechName { get; set; } = "Jenner JR7-D";
+	private string SelectedEnemyMechName { get; set; } = "Hunchback HBK-4G";
+
 	private readonly record struct ComponentStatus(ComponentType Type, bool IsDestroyed);
-
-	private enum HitLocation
-	{
-		Head,
-		CenterTorso,
-		LeftTorso,
-		RightTorso,
-		LeftArm,
-		RightArm,
-		LeftLeg,
-		RightLeg
-	}
-
-	private enum AttackArc
-	{
-		Front,
-		LeftSide,
-		RightSide,
-		Rear
-	}
-
-	private enum ComponentType
-	{
-		Engine,
-		Gyro,
-		Weapon,
-		JumpJet
-	}
 
 	private readonly record struct SectionState(int Armor, int Internal);
 
@@ -343,20 +327,23 @@
 			return;
 		}
 
+		var playerDef = MechCatalog.Get(SelectedPlayerMechName) ?? throw new InvalidOperationException($"Mech not found: {SelectedPlayerMechName}");
+		var enemyDef = MechCatalog.Get(SelectedEnemyMechName) ?? throw new InvalidOperationException($"Mech not found: {SelectedEnemyMechName}");
+
 		var playerOnLeft = Random.Shared.Next(0, 2) == 0;
 		var playerSpawn = FindSideSpawnTile(playerOnLeft);
-		var playerMovement = GetMovementByClassAndMode(SelectedMechClass, ActiveMovementMode);
+		var playerMovement = GetMechMpByMode(playerDef, ActiveMovementMode);
 		var playerFacing = playerOnLeft ? HexDirection.East : HexDirection.West;
-		UserMech = new PlayerMech(SelectedMechClass, playerSpawn.Column, playerSpawn.Row, playerFacing, playerMovement, playerMovement);
+		UserMech = new PlayerMech(SelectedPlayerMechName, playerDef.Class, playerSpawn.Column, playerSpawn.Row, playerFacing, playerMovement, playerMovement, playerDef.Weapons, playerDef.WalkSpeed, playerDef.RunSpeed, playerDef.JumpSpeed);
 
 		var enemySpawn = FindSideSpawnTile(!playerOnLeft);
 		var enemyFacing = playerOnLeft ? HexDirection.West : HexDirection.East;
-		EnemyMech = new PlayerMech(MechClass.Medium, enemySpawn.Column, enemySpawn.Row, enemyFacing, 0, 0);
+		EnemyMech = new PlayerMech(SelectedEnemyMechName, enemyDef.Class, enemySpawn.Column, enemySpawn.Row, enemyFacing, 0, 0, enemyDef.Weapons, enemyDef.WalkSpeed, enemyDef.RunSpeed, enemyDef.JumpSpeed);
 
 		RoundNumber = 1;
 		IsPlayerPhase = true;
-		InitializeSections(PlayerSections, SelectedMechClass);
-		InitializeSections(EnemySections, EnemyMech.Class);
+		InitializeSections(PlayerSections, playerDef.Class);
+		InitializeSections(EnemySections, enemyDef.Class);
 		InitializeComponents(PlayerComponents);
 		InitializeComponents(EnemyComponents);
 		RecalculateDurabilityTotals();
@@ -372,7 +359,7 @@
 		LastEnemyAttackMessage = string.Empty;
 		ClearCombatFx();
 		UpdatePlayerFiringArc();
-		LastActionMessage = $"{SelectedMechClass} mech deployed. Round 1 starts in {ActiveMovementMode} mode.";
+		LastActionMessage = $"{playerDef.Name} deployed against {enemyDef.Name}. Round 1 starts in {ActiveMovementMode} mode.";
 	}
 
 	private (int Column, int Row) FindSideSpawnTile(bool leftSide)
@@ -671,6 +658,12 @@
 			return;
 		}
 
+		if (mode == MovementMode.Jump && UserMech.JumpMp == 0)
+		{
+			LastActionMessage = $"{UserMech.MechName} has no jump jets.";
+			return;
+		}
+
 		if (UserMech.RemainingMovement != UserMech.MaxMovement)
 		{
 			LastActionMessage = "You can only change movement mode before spending movement this turn.";
@@ -678,7 +671,7 @@
 		}
 
 		ActiveMovementMode = mode;
-		var resetMovement = GetMovementByClassAndMode(UserMech.Class, ActiveMovementMode);
+		var resetMovement = GetMechMpByMode(UserMech, ActiveMovementMode);
 		UserMech = UserMech with { RemainingMovement = resetMovement, MaxMovement = resetMovement };
 		LastActionMessage = $"Movement mode set to {ActiveMovementMode}.";
 	}
@@ -783,6 +776,37 @@
 		EnemyInternal > 0 &&
 		!IsArmDestroyed(PlayerSections);  // BATTLETECHCOMPLIANCE: Can't fire if arms destroyed
 
+	private static IReadOnlyList<Weapon> GetFiredWeapons(IReadOnlyList<Weapon>? weapons, MovementMode mode)
+	{
+		if (weapons is null || weapons.Count == 0)
+		{
+			return new List<Weapon>();
+		}
+
+		// At walk speed, all weapons fire
+		if (mode == MovementMode.Walk)
+		{
+			return weapons.ToList();
+		}
+
+		// At run/jump, only half weapons fire (every other weapon, selecting the most damaging ones first)
+		var sorted = weapons.OrderByDescending(w => w.Damage).ToList();
+		var fireCount = Math.Max(1, sorted.Count / 2);
+		return sorted.Take(fireCount).ToList();
+	}
+
+	private static string FormatWeaponList(IReadOnlyList<Weapon> weapons)
+	{
+		if (weapons.Count == 0)
+		{
+			return "No weapons";
+		}
+
+		return weapons.Count == 1
+			? weapons[0].Name
+			: string.Join(", ", weapons.Select(w => w.Name));
+	}
+
 	private async Task ResolvePlayerAttack()
 	{
 		if (!IsPlayerPhase || !CanPlayerFire || UserMech is null || EnemyMech is null)
@@ -818,20 +842,26 @@
 		var roll = Roll2d6();
 
 		HasPlayerFiredThisTurn = true;
-		AddPlayerHeat(WeaponHeat);
+
+		// Determine which weapons fire
+		var firedWeapons = GetFiredWeapons(UserMech.Weapons, ActiveMovementMode);
+		var weaponDamage = firedWeapons.Sum(w => w.Damage);
+		var weaponHeat = firedWeapons.Sum(w => w.Heat);
+		AddPlayerHeat(weaponHeat);
 
 		var modBreakdown = FormatModifierBreakdown(BaseToHit, rangeModifier, attackerModifier, targetModifier, heatModifier, gyroModifier, terrainFiringModifier);
 
 		if (roll < targetNumber)
 		{
 			await PlayShotAnimation(attackerIsPlayer: true, targetIsPlayer: false, hit: false, impactDetail: null);
-			LastActionMessage = $"MISS — rolled {roll} vs TN {targetNumber} ({modBreakdown}).";
+			var weaponLog = FormatWeaponList(firedWeapons);
+			LastActionMessage = $"MISS — {weaponLog} fired; rolled {roll} vs TN {targetNumber} ({modBreakdown}).";
 			return;
 		}
 
 		var enemyArc = GetIncomingArc(EnemyMech.Facing, EnemyMech.Column, EnemyMech.Row, UserMech.Column, UserMech.Row);
 		var hitLocation = RollHitLocation(enemyArc, Roll2d6());
-		ApplyDamage(EnemySections, hitLocation, WeaponDamage, out var armorDamage, out var internalDamage, out var transferredToCt);
+		ApplyDamage(EnemySections, hitLocation, weaponDamage, out var armorDamage, out var internalDamage, out var transferredToCt);
 		var criticalHitMsg = string.Empty;
 		if (internalDamage > 0)
 		{
@@ -840,7 +870,8 @@
 		var impactDetail = BuildImpactDamageText(hitLocation, armorDamage, internalDamage);
 		await PlayShotAnimation(attackerIsPlayer: true, targetIsPlayer: false, hit: true, impactDetail: impactDetail);
 		RecalculateDurabilityTotals();
-		LastActionMessage = $"HIT — rolled {roll} vs TN {targetNumber} ({modBreakdown}). {enemyArc} arc → {FormatLocation(hitLocation)}: {armorDamage} armor / {internalDamage} internal.";
+		var weaponLog2 = FormatWeaponList(firedWeapons);
+		LastActionMessage = $"HIT — {weaponLog2} fired; rolled {roll} vs TN {targetNumber} ({modBreakdown}). {enemyArc} arc → {FormatLocation(hitLocation)}: {armorDamage} armor / {internalDamage} internal.";
 		if (!string.IsNullOrWhiteSpace(criticalHitMsg))
 		{
 			LastActionMessage += $" {criticalHitMsg}";
@@ -915,7 +946,7 @@
 		IsPlayerPhase = true;
 
 		TryRecoverFromShutdown(isPlayer: true);
-		var refreshedMovement = PlayerShutdown ? 0 : GetEffectiveMovement(UserMech.Class, ActiveMovementMode, PlayerSections);  // BATTLETECHCOMPLIANCE: Account for leg destruction
+		var refreshedMovement = PlayerShutdown ? 0 : GetEffectiveMovement(UserMech, ActiveMovementMode, PlayerSections);
 		if (IsComponentDestroyed(PlayerComponents, ComponentType.Engine))
 		{
 			refreshedMovement = Math.Max(1, refreshedMovement - 2);
@@ -951,8 +982,8 @@
 
 		var enemy = EnemyMech with
 		{
-			RemainingMovement = GetMovementByClassAndMode(EnemyMech.Class, MovementMode.Walk),
-			MaxMovement = GetMovementByClassAndMode(EnemyMech.Class, MovementMode.Walk)
+			RemainingMovement = EnemyMech.WalkMp,
+			MaxMovement = EnemyMech.WalkMp
 		};
 
 		LastEnemyAttackMessage = string.Empty;
@@ -1040,7 +1071,10 @@
 				}
 			else
 			{
-			EnemyHeat += WeaponHeat;
+			var firedWeapons = GetFiredWeapons(enemy.Weapons, MovementMode.Walk);
+			var enemyWeaponDamage = firedWeapons.Sum(w => w.Damage);
+			var enemyWeaponHeat = firedWeapons.Sum(w => w.Heat);
+			EnemyHeat += enemyWeaponHeat;
 			var heatModifier = GetHeatToHitModifier(EnemyHeat);
 			var enemyGyroModifier = IsComponentDestroyed(EnemyComponents, ComponentType.Gyro) ? 2 : 0;
 			var enemyAttackerModifier = GetAttackerMovementModifier(MovementMode.Walk, movedHexes);
@@ -1048,11 +1082,12 @@
 			var targetNumber = BaseToHit + rangeModifier + enemyAttackerModifier + playerTargetModifier + heatModifier + enemyGyroModifier + enemyTerrainModifier;
 			var roll = Roll2d6();
 			var modBreakdown = FormatModifierBreakdown(BaseToHit, rangeModifier, enemyAttackerModifier, playerTargetModifier, heatModifier, enemyGyroModifier, enemyTerrainModifier);
+			var weaponLog = FormatWeaponList(firedWeapons);
 				if (roll >= targetNumber)
 			{
 				var incomingArc = GetIncomingArc(UserMech.Facing, UserMech.Column, UserMech.Row, enemy.Column, enemy.Row);
 				var hitLocation = RollHitLocation(incomingArc, Roll2d6());
-				ApplyDamage(PlayerSections, hitLocation, WeaponDamage, out var armorDamage, out var internalDamage, out _);
+				ApplyDamage(PlayerSections, hitLocation, enemyWeaponDamage, out var armorDamage, out var internalDamage, out _);
 				var critMsg = string.Empty;
 				if (internalDamage > 0)
 				{
@@ -1062,7 +1097,7 @@
 					await PlayShotAnimation(attackerIsPlayer: false, targetIsPlayer: true, hit: true, impactDetail: impactDetail);
 				RecalculateDurabilityTotals();
 				actions.Add($"hit ({roll}/{targetNumber})");
-				LastEnemyAttackMessage = $"Enemy HIT — rolled {roll} vs TN {targetNumber} ({modBreakdown}). {incomingArc} arc → {FormatLocation(hitLocation)}: {armorDamage} armor / {internalDamage} internal.";
+				LastEnemyAttackMessage = $"Enemy HIT — {weaponLog} fired; rolled {roll} vs TN {targetNumber} ({modBreakdown}). {incomingArc} arc → {FormatLocation(hitLocation)}: {armorDamage} armor / {internalDamage} internal.";
 				if (!string.IsNullOrWhiteSpace(critMsg))
 				{
 					LastEnemyAttackMessage += $" {critMsg}";
@@ -1187,6 +1222,22 @@
 		_ => 5
 	};
 
+	private static int GetMechMpByMode(MechDefinition def, MovementMode mode) => mode switch
+	{
+		MovementMode.Walk => def.WalkSpeed,
+		MovementMode.Run => def.RunSpeed,
+		MovementMode.Jump => def.JumpSpeed,
+		_ => def.WalkSpeed
+	};
+
+	private static int GetMechMpByMode(PlayerMech mech, MovementMode mode) => mode switch
+	{
+		MovementMode.Walk => mech.WalkMp,
+		MovementMode.Run => mech.RunMp,
+		MovementMode.Jump => mech.JumpMp,
+		_ => mech.WalkMp
+	};
+
 	/// <summary>
 	/// BATTLETECHCOMPLIANCE: Calculates effective movement accounting for destroyed legs.
 	/// - Both legs destroyed: 0 (immobilized)
@@ -1194,9 +1245,9 @@
 	/// - No legs destroyed: Base movement
 	/// Per BattleTech rules, loss of legs reduces mobility.
 	/// </summary>
-	private int GetEffectiveMovement(MechClass mechClass, MovementMode mode, Dictionary<HitLocation, SectionState> sections)
+	private int GetEffectiveMovement(PlayerMech mech, MovementMode mode, Dictionary<HitLocation, SectionState> sections)
 	{
-		var baseMovement = GetMovementByClassAndMode(mechClass, mode);
+		var baseMovement = GetMechMpByMode(mech, mode);
 		
 		var leftLegDestroyed = sections[HitLocation.LeftLeg].Internal <= 0;
 		var rightLegDestroyed = sections[HitLocation.RightLeg].Internal <= 0;
@@ -1605,7 +1656,7 @@
 
 		var lines = new List<string>
 		{
-			$"{title} {mech.Class} Mech",
+			$"{title} {mech.MechName}",
 			$"Facing: {mech.Facing} | Hex: ({mech.Column}, {mech.Row}) {terrainContext}",
 			$"Mode: {mode} | Movement: {mech.RemainingMovement}/{mech.MaxMovement}",
 			$"Heat: {heat} | Status: {(shutdown ? "Shutdown" : "Online")} | Ammo: {(ammoIntact ? "Safe" : "Exploded")}",
@@ -1640,6 +1691,19 @@
 		lines.Add(criticalLines.Count == 0
 			? "Critical damage: None"
 			: $"Critical damage: {string.Join(", ", criticalLines)}");
+
+		// Add weapon information
+		if (mech.Weapons is not null && mech.Weapons.Count > 0)
+		{
+			lines.Add("Weapons:");
+			var weaponsByLocation = mech.Weapons.GroupBy(w => w.Location).OrderBy(g => g.Key.ToString());
+			foreach (var group in weaponsByLocation)
+			{
+				var location = GetShortLocationLabel(group.Key);
+				var weaponList = string.Join(", ", group.Select(w => $"{w.Name}({w.Damage}dmg/{w.Heat}ht)"));
+				lines.Add($"- {location,-8} {weaponList}");
+			}
+		}
 
 		return string.Join("\n", lines);
 	}
