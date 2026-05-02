@@ -184,7 +184,7 @@ else
                 <div class="mw-tooltip-title">@_tooltipTitle</div>
                 @foreach (var line in _tooltipLines)
                 {
-                    <div class="mw-tooltip-line">@line</div>
+                    <div class="mw-tooltip-line">@RenderTooltipLine(line)</div>
                 }
                 @if (!string.IsNullOrWhiteSpace(_tooltipFooter))
                 {
@@ -576,6 +576,28 @@ else
     }
 
     private static double Lerp(double min, double max, double t) => min + ((max - min) * t);
+
+    private RenderFragment RenderTooltipLine(string line)
+    {
+        return builder =>
+        {
+            var parts = line.Split(new[] { "~~" }, StringSplitOptions.None);
+            for (var i = 0; i < parts.Length; i++)
+            {
+                if (i % 2 == 0)
+                {
+                    builder.AddContent(i, parts[i]);
+                }
+                else
+                {
+                    builder.OpenElement(i, "span");
+                    builder.AddAttribute(i + 1, "class", "destroyed-weapon");
+                    builder.AddContent(i + 2, parts[i]);
+                    builder.CloseElement();
+                }
+            }
+        };
+    }
 
     private static string FormatNumber(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 }

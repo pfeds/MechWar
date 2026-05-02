@@ -14,7 +14,10 @@
 
         <div class="lobby-form">
             <div class="lobby-section">
-                <h2>Battlefield</h2>
+                <div class="lobby-section-header">
+                    <h2>Battlefield</h2>
+                    <button class="btn btn-sm btn-outline-secondary randomise-btn" @onclick="RandomiseBattlefield" title="Randomise battlefield settings">🎲</button>
+                </div>
                 <div class="lobby-row">
                     <div class="lobby-field">
                         <label for="theme">Theme</label>
@@ -37,7 +40,10 @@
             </div>
 
             <div class="lobby-section">
-                <h2>Combatants</h2>
+                <div class="lobby-section-header">
+                    <h2>Combatants</h2>
+                    <button class="btn btn-sm btn-outline-secondary randomise-btn" @onclick="RandomiseCombatants" title="Randomise combatants">🎲</button>
+                </div>
                 <div class="lobby-row">
                     <div class="lobby-field">
                         <label for="playerMech">Your Mech</label>
@@ -79,6 +85,7 @@
         <p class="lobby-spawn-preview">@SpawnPreview</p>
 
         <div class="lobby-actions">
+            <button class="btn btn-outline-secondary btn-lg" @onclick="RandomiseAll" title="Randomise everything">🎲 Randomise</button>
             <button class="btn btn-primary btn-lg lobby-start-btn" @onclick="StartGame" disabled="@(!IsFormValid)">
                 ▶ Deploy &amp; Fight
             </button>
@@ -92,17 +99,19 @@
     private const int MinMapHeight = 8;
     private const int MaxMapHeight = 60;
 
-    private string SelectedThemeKey { get; set; } = ThemeCatalog.All[0].Key;
+    private static readonly int[] MapWidthPresets  = { 20, 24, 28, 32, 36, 40 };
+    private static readonly int[] MapHeightPresets = { 14, 16, 18, 20, 22, 24 };
+
+    private string SelectedThemeKey { get; set; } = string.Empty;
     private int Width { get; set; } = 28;
     private int Height { get; set; } = 20;
-    private string SelectedPlayerMechName { get; set; } = "Jenner JR7-D";
-    private string SelectedEnemyMechName { get; set; } = "Hunchback HBK-4G";
+    private string SelectedPlayerMechName { get; set; } = string.Empty;
+    private string SelectedEnemyMechName { get; set; } = string.Empty;
 
     private MechDefinition? PlayerDef => MechCatalog.Get(SelectedPlayerMechName);
     private MechDefinition? EnemyDef => MechCatalog.Get(SelectedEnemyMechName);
 
     private bool IsFormValid => Width >= MinMapWidth && Width <= MaxMapWidth && Height >= MinMapHeight && Height <= MaxMapHeight;
-
     private string ValidationMessage => $"Map size must be between {MinMapWidth}-{MaxMapWidth} wide and {MinMapHeight}-{MaxMapHeight} high.";
 
     private string SpawnPreview
@@ -114,6 +123,31 @@
             var max = Math.Min(6, Math.Max(min, Width - 2));
             return $"Mechs spawn on opposite sides, {min}–{max} hexes from each edge, any row 0–{Height - 1}.";
         }
+    }
+
+    protected override void OnInitialized() => RandomiseAll();
+
+    private void RandomiseBattlefield()
+    {
+        SelectedThemeKey = ThemeCatalog.All[Random.Shared.Next(ThemeCatalog.All.Count)].Key;
+        Width  = MapWidthPresets[Random.Shared.Next(MapWidthPresets.Length)];
+        Height = MapHeightPresets[Random.Shared.Next(MapHeightPresets.Length)];
+    }
+
+    private void RandomiseCombatants()
+    {
+        var allNames = MechCatalog.AllMechNames;
+        SelectedPlayerMechName = allNames[Random.Shared.Next(allNames.Count)];
+        string enemy;
+        do { enemy = allNames[Random.Shared.Next(allNames.Count)]; }
+        while (enemy == SelectedPlayerMechName && allNames.Count > 1);
+        SelectedEnemyMechName = enemy;
+    }
+
+    private void RandomiseAll()
+    {
+        RandomiseBattlefield();
+        RandomiseCombatants();
     }
 
     private void StartGame()

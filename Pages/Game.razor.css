@@ -12,6 +12,8 @@
 .turn-controls-row { display: flex; align-items: center; justify-content: center; gap: 0.45rem; flex-wrap: nowrap; overflow-x: auto; padding: 0.2rem 0.35rem; }
 .help-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.15rem; height: 1.15rem; border-radius: 999px; border: 1px solid #6b778a; color: #384152; font-size: 0.74rem; font-weight: 700; cursor: help; background: #f7f9fc; }
 .turn-btn { padding: 0.14rem 0.4rem; font-size: 0.72rem; line-height: 1.2; }
+.move-btn { font-size: 0.9rem; padding: 0.1rem 0.38rem; min-width: 1.7rem; }
+.turn-controls-divider { width: 1px; height: 1.2rem; background: #c8d0dd; margin: 0 0.1rem; align-self: center; display: inline-block; }
 .mode-label { font-weight: 600; color: #3a3f4a; }
 .control-panel {
     display: flex;

@@ -93,6 +93,11 @@
     color: #49e349;
 }
 
+.destroyed-weapon {
+    color: #ff4d4d;
+    text-decoration: line-through;
+}
+
 .mw-tooltip-footer {
     margin-top: 0.28rem;
     font-size: 0.66rem;

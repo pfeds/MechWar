@@ -67,12 +67,18 @@
 				@if (!IsGameOver)
 				{
 					<span class="mode-label">Mode:</span>
-					<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Walk)" @onclick="() => TrySetMovementMode(MovementMode.Walk)">Walk</button>
-					<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Run)" @onclick="() => TrySetMovementMode(MovementMode.Run)">Run</button>
-					<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Jump)" @onclick="() => TrySetMovementMode(MovementMode.Jump)">Jump</button>
-					<button class="btn btn-sm turn-btn btn-danger" @onclick="ResolvePlayerAttack" disabled="@(UserMech is null || EnemyMech is null || !IsPlayerPhase || !CanPlayerFire)">Fire (F)</button>
-					<button class="btn btn-sm turn-btn btn-outline-secondary" @onclick="EndPlayerTurn" disabled="@(UserMech is null || !IsPlayerPhase)">End Turn</button>
-					<span class="help-icon" title="Arrows: rotate/move. 1/2/3 or W/R/J: switch mode. F or Space: fire.">?</span>
+					<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Walk)" @onclick="() => TrySetMovementMode(MovementMode.Walk)" title="Walk mode (1 or W)">Walk</button>
+					<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Run)" @onclick="() => TrySetMovementMode(MovementMode.Run)" title="Run mode (2 or R)">Run</button>
+					<button class="btn btn-sm turn-btn @GetModeButtonClass(MovementMode.Jump)" @onclick="() => TrySetMovementMode(MovementMode.Jump)" title="Jump mode (3 or J)">Jump</button>
+					<span class="turn-controls-divider"></span>
+					<button class="btn btn-sm turn-btn btn-outline-secondary move-btn" @onclick="() => TryRotate(1)" disabled="@(!IsPlayerPhase || IsGameOver || UserMech is null)" title="Turn left (←)">↺</button>
+					<button class="btn btn-sm turn-btn btn-outline-secondary move-btn" @onclick="() => TryMove(true)" disabled="@(!IsPlayerPhase || IsGameOver || UserMech is null)" title="Move forward (↑)">↑</button>
+					<button class="btn btn-sm turn-btn btn-outline-secondary move-btn" @onclick="() => TryMove(false)" disabled="@(!IsPlayerPhase || IsGameOver || UserMech is null)" title="Move back (↓)">↓</button>
+					<button class="btn btn-sm turn-btn btn-outline-secondary move-btn" @onclick="() => TryRotate(-1)" disabled="@(!IsPlayerPhase || IsGameOver || UserMech is null)" title="Turn right (→)">↻</button>
+					<span class="turn-controls-divider"></span>
+					<button class="btn btn-sm turn-btn btn-danger" @onclick="ResolvePlayerAttack" disabled="@(UserMech is null || EnemyMech is null || !IsPlayerPhase || !CanPlayerFire)" title="Fire weapons (F or Space)">🎯 Fire</button>
+					<button class="btn btn-sm turn-btn btn-outline-secondary" @onclick="EndPlayerTurn" disabled="@(UserMech is null || !IsPlayerPhase)" title="End your turn">End Turn</button>
+					<span class="help-icon" title="← → rotate | ↑ ↓ move | 1/W 2/R 3/J mode | F/Space fire">?</span>
 				}
 				else
 				{
@@ -1270,9 +1276,29 @@
 			var weaponsByLocation = mech.Weapons.GroupBy(w => w.Location).OrderBy(g => g.Key.ToString());
 			foreach (var group in weaponsByLocation)
 			{
-				var location = GetShortLocationLabel(group.Key);
-				var weaponList = string.Join(", ", group.Select(w => $"{w.Name}({w.Damage}dmg/{w.Heat}ht)"));
-				lines.Add($"- {location,-8} {weaponList}");
+				var location = group.Key;
+				var locationLabel = GetShortLocationLabel(location);
+				
+				var destroyedWeaponSlots = 0;
+				if (components.TryGetValue(location, out var parts))
+				{
+					destroyedWeaponSlots = parts.Count(p => p.Type == ComponentType.Weapon && p.IsDestroyed);
+				}
+
+				var weaponStrings = new List<string>();
+				var locationWeapons = group.ToList();
+				for (var i = 0; i < locationWeapons.Count; i++)
+				{
+					var w = locationWeapons[i];
+					var weaponStr = $"{w.Name}({w.Damage}dmg/{w.Heat}ht)";
+					if (i >= locationWeapons.Count - destroyedWeaponSlots)
+					{
+						weaponStr = $"~~{weaponStr}~~";
+					}
+					weaponStrings.Add(weaponStr);
+				}
+				
+				lines.Add($"- {locationLabel,-8} {string.Join(", ", weaponStrings)}");
 			}
 		}
 
