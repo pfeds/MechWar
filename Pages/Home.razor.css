@@ -209,6 +209,23 @@
     animation: logDestructionFlash 0.9s ease-in-out infinite alternate;
 }
 
+.matrix-console .log-round {
+    color: #49e349;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.matrix-console .log-prefix-enemy {
+    color: #ff5a5a;
+    font-weight: 700;
+}
+
+.matrix-console .log-prefix-allied {
+    color: #7ebcff;
+    font-weight: 700;
+}
+
 @keyframes logDestructionFlash {
     from { color: #ff2c2c; }
     to   { color: #ff9090; }

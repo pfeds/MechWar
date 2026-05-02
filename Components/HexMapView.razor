@@ -79,7 +79,7 @@ else
                     <title>@BuildTileTooltip(tile)</title>
                     <polygon
                         points="@points"
-                        fill="@TerrainCatalog.GetColor(tile.Terrain)"
+                        fill="@GetTileFillColor(tile)"
                         class="hex-cell hex-base" />
                     <polygon
                         points="@points"
@@ -264,11 +264,47 @@ else
         _ => "texture-grain"
     };
 
+    private static string GetTileFillColor(HexTile tile)
+    {
+        var baseColor = TerrainCatalog.GetColor(tile.Terrain);
+
+        if (tile.WaterDepth is int waterDepth && waterDepth > 0)
+        {
+            return DarkenColor(baseColor, Math.Min(0.18, 0.06 * waterDepth));
+        }
+
+        if (tile.HillLevel is int hillLevel && hillLevel > 0)
+        {
+            return DarkenColor(baseColor, Math.Min(0.15, 0.05 * hillLevel));
+        }
+
+        return baseColor;
+    }
+
+    private static string DarkenColor(string hex, double amount)
+    {
+        if (string.IsNullOrWhiteSpace(hex) || !hex.StartsWith('#') || hex.Length != 7)
+        {
+            return hex;
+        }
+
+        var r = Convert.ToInt32(hex.Substring(1, 2), 16);
+        var g = Convert.ToInt32(hex.Substring(3, 2), 16);
+        var b = Convert.ToInt32(hex.Substring(5, 2), 16);
+
+        var multiplier = Math.Clamp(1.0 - amount, 0.0, 1.0);
+        r = (int)Math.Round(r * multiplier);
+        g = (int)Math.Round(g * multiplier);
+        b = (int)Math.Round(b * multiplier);
+
+        return $"#{r:X2}{g:X2}{b:X2}";
+    }
+
     private string BuildTileTooltip(HexTile tile)
     {
         var terrainLabel = TerrainCatalog.GetLabel(tile.Terrain);
         var movement = GetMovementTooltip(tile);
-        var firing = GetFiringTooltip(tile);
+        var combat = GetCombatTooltip(tile);
 
         var elevationText = tile.HillLevel is int hillLevel
             ? $"\nElevation: Level {hillLevel}"
@@ -276,7 +312,7 @@ else
                 ? $"\nWater: Depth {depth}"
                 : string.Empty;
 
-        var tooltip = $"Hex ({tile.Column}, {tile.Row})\nTerrain: {terrainLabel}{elevationText}\nMovement: {movement}\nFiring: {firing}";
+        var tooltip = $"Hex ({tile.Column}, {tile.Row})\nTerrain: {terrainLabel}{elevationText}\nMovement: {movement}\nCombat: {combat}";
 
         if (Mech is not null && Mech.Column == tile.Column && Mech.Row == tile.Row && !string.IsNullOrWhiteSpace(PlayerMechTooltip))
         {
@@ -317,19 +353,67 @@ else
         return $"Walk/Run: {baseCost} MP{hillText}; Jump: 1 MP";
     }
 
-    private static string GetFiringTooltip(HexTile tile)
+    private static string GetCombatTooltip(HexTile tile)
     {
-        if (tile.WaterDepth is >= 2)
+        if (tile.Terrain == TerrainType.Mountains)
         {
-            return "Target in depth 2+ water: +1 to-hit modifier";
+            return "Defense: blocks LOS and acts as full cover; Offense: cannot fire from here because walk/run cannot enter; Movement: jump-over only.";
         }
 
-        if (tile.HillLevel is >= 2)
+        var effects = new List<string>();
+
+        if (tile.WaterDepth is int waterDepth)
         {
-            return "Level 2+ hill target: +1 to-hit modifier; high hills can block LOS";
+            var defense = waterDepth switch
+            {
+                1 => "+1 defense while partially submerged",
+                >= 2 => "+2 defense while submerged",
+                _ => "no defense bonus"
+            };
+
+            effects.Add($"Defense: {defense}");
+            effects.Add($"LOS/Elevation: counts as level -{waterDepth}");
+            return string.Join("; ", effects) + ".";
         }
 
-        return "Elevation may block LOS if intervening hex is 1+ level above attacker/target";
+        if (tile.HillLevel is int hillLevel)
+        {
+            var defense = hillLevel switch
+            {
+                1 => "+1 defense from elevation",
+                >= 2 => "+2 defense from elevation",
+                _ => "no defense bonus"
+            };
+
+            effects.Add($"Defense: {defense}");
+            effects.Add($"LOS/Elevation: counts as level {hillLevel} and can block line of sight") ;
+        }
+
+        var terrainCombat = tile.Terrain switch
+        {
+            TerrainType.Forest => "Defense: +1 cover from trees",
+            TerrainType.Jungle => "Defense: +1 cover from dense vegetation",
+            TerrainType.Urban => "Defense: +1 cover from buildings",
+            TerrainType.Canyon => "Defense: +1 cover from canyon walls",
+            TerrainType.Swamp => "Defense: +1 cover from swamp concealment",
+            TerrainType.Crater => "Defense: +1 cover from crater rim",
+            TerrainType.Plains or TerrainType.Rock or TerrainType.Sand or TerrainType.Ice or TerrainType.Scrub => "Defense: no terrain cover bonus",
+            TerrainType.Hills => null,
+            _ => null
+        };
+
+        if (!string.IsNullOrWhiteSpace(terrainCombat))
+        {
+            effects.Add(terrainCombat);
+        }
+
+        if (effects.Count == 0)
+        {
+            effects.Add("Defense: no terrain cover bonus");
+            effects.Add("LOS/Elevation: no special combat effect");
+        }
+
+        return string.Join("; ", effects) + ".";
     }
 
     private static string? GetTileBottomLabel(HexTile tile) =>

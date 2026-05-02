@@ -90,7 +90,14 @@
 			<div class="matrix-console">
 				@foreach (var line in CombatLog)
 				{
-					<div class="@GetLogCssClass(line)">@line</div>
+					var parsedLine = ParseConsoleLine(line);
+					<div class="@GetLogCssClass(line)">
+						@if (!string.IsNullOrWhiteSpace(parsedLine.Prefix))
+						{
+							<span class="@GetPrefixCssClass(parsedLine.Prefix)">@parsedLine.Prefix</span><span> </span>
+						}
+						@parsedLine.Message
+					</div>
 				}
 			</div>
 		</section>
@@ -181,6 +188,7 @@
 	private readonly List<string> CombatLog = new();
 
 	private enum LogEntryType { Normal, Hit, Miss, Destruction }
+	private readonly record struct ConsoleLineParts(string? Prefix, string Message);
 	private string _lastActionMessage = string.Empty;
 	private string LastActionMessage
 	{
@@ -802,7 +810,7 @@
 			return;
 		}
 
-		var attackerModifier = GetAttackerMovementModifier(ActiveMovementMode);
+		var attackerModifier = GetAttackerMovementModifier(ActiveMovementMode, PlayerHexesMovedThisTurn);
 		var targetModifier = GetTargetMovementModifier(EnemyHexesMovedLastTurn);
 		var heatModifier = GetHeatToHitModifier(PlayerHeat);
 		var gyroModifier = IsComponentDestroyed(PlayerComponents, ComponentType.Gyro) ? 2 : 0;
@@ -873,7 +881,7 @@
 			return losBlockedMessage;
 		}
 
-		var attackerModifier = GetAttackerMovementModifier(ActiveMovementMode);
+		var attackerModifier = GetAttackerMovementModifier(ActiveMovementMode, PlayerHexesMovedThisTurn);
 		var targetModifier = GetTargetMovementModifier(EnemyHexesMovedLastTurn);
 		var heatModifier = GetHeatToHitModifier(PlayerHeat);
 		var gyroModifier = IsComponentDestroyed(PlayerComponents, ComponentType.Gyro) ? 2 : 0;
@@ -902,7 +910,7 @@
 		}
 
 		IsPlayerPhase = false;
-		var enemySummary = await ExecuteEnemyTurn();
+		await ExecuteEnemyTurn();
 		RoundNumber++;
 		IsPlayerPhase = true;
 
@@ -916,10 +924,16 @@
 		PlayerHexesMovedThisTurn = 0;
 		HasPlayerFiredThisTurn = false;
 		UpdatePlayerFiringArc();
-		LastActionMessage = $"Enemy turn: {enemySummary} Round {RoundNumber} begins. {(PlayerShutdown ? "Player remains shutdown." : $"{ActiveMovementMode} movement refreshed.")}";
+		AddConsoleLine($"Round {RoundNumber}");
+
 		if (!string.IsNullOrWhiteSpace(LastEnemyAttackMessage))
 		{
-			LastActionMessage += $" {LastEnemyAttackMessage}";
+			_lastActionMessage = LastEnemyAttackMessage;
+			AddConsoleLine(LastEnemyAttackMessage);
+		}
+		else if (PlayerShutdown)
+		{
+			_lastActionMessage = "Player remains shutdown.";
 		}
 	}
 
@@ -1029,7 +1043,7 @@
 			EnemyHeat += WeaponHeat;
 			var heatModifier = GetHeatToHitModifier(EnemyHeat);
 			var enemyGyroModifier = IsComponentDestroyed(EnemyComponents, ComponentType.Gyro) ? 2 : 0;
-			var enemyAttackerModifier = GetAttackerMovementModifier(MovementMode.Walk);
+			var enemyAttackerModifier = GetAttackerMovementModifier(MovementMode.Walk, movedHexes);
 			var playerTargetModifier = GetTargetMovementModifier(PlayerHexesMovedThisTurn);
 			var targetNumber = BaseToHit + rangeModifier + enemyAttackerModifier + playerTargetModifier + heatModifier + enemyGyroModifier + enemyTerrainModifier;
 			var roll = Roll2d6();
@@ -1769,8 +1783,7 @@
 			return;
 		}
 
-		var type = ClassifyLogLine(line);
-		var entry = $"> {line}";
+		var entry = PrefixConsoleLine(line);
 
 		// Insert at top so newest messages appear first
 		if (CombatLog.Count > 0 && CombatLog[0] == entry)
@@ -1785,26 +1798,61 @@
 		}
 	}
 
+	private static string PrefixConsoleLine(string line)
+	{
+		if (line.StartsWith("[Enemy]", StringComparison.OrdinalIgnoreCase) ||
+			line.StartsWith("[Allied]", StringComparison.OrdinalIgnoreCase) ||
+			line.StartsWith("Round ", StringComparison.OrdinalIgnoreCase))
+		{
+			return line;
+		}
+
+		return IsEnemyActionLine(line)
+			? $"[Enemy] {line}"
+			: $"[Allied] {line}";
+	}
+
+	private static bool IsEnemyActionLine(string line) =>
+		line.StartsWith("Enemy ", StringComparison.OrdinalIgnoreCase);
+
+	private static ConsoleLineParts ParseConsoleLine(string line)
+	{
+		if (line.StartsWith("[Enemy] ", StringComparison.OrdinalIgnoreCase))
+		{
+			return new("[Enemy]", line.Substring(8));
+		}
+
+		if (line.StartsWith("[Allied] ", StringComparison.OrdinalIgnoreCase))
+		{
+			return new("[Allied]", line.Substring(9));
+		}
+
+		return new(null, line);
+	}
+
 	private static LogEntryType ClassifyLogLine(string line)
 	{
+		var parsedLine = ParseConsoleLine(line);
+		var content = parsedLine.Message;
+
 		// Destruction: any Critical or section/mech destroyed message
-		if (line.Contains("CRITICAL", StringComparison.OrdinalIgnoreCase) ||
-			line.Contains("destroyed", StringComparison.OrdinalIgnoreCase) ||
-			line.Contains("explosion", StringComparison.OrdinalIgnoreCase))
+		if (content.Contains("CRITICAL", StringComparison.OrdinalIgnoreCase) ||
+			content.Contains("destroyed", StringComparison.OrdinalIgnoreCase) ||
+			content.Contains("explosion", StringComparison.OrdinalIgnoreCase))
 		{
 			return LogEntryType.Destruction;
 		}
 
 		// Hit messages
-		if (line.StartsWith("HIT", StringComparison.OrdinalIgnoreCase) ||
-			line.StartsWith("Enemy HIT", StringComparison.OrdinalIgnoreCase))
+		if (content.StartsWith("HIT", StringComparison.OrdinalIgnoreCase) ||
+			content.StartsWith("Enemy HIT", StringComparison.OrdinalIgnoreCase))
 		{
 			return LogEntryType.Hit;
 		}
 
 		// Miss messages
-		if (line.StartsWith("MISS", StringComparison.OrdinalIgnoreCase) ||
-			line.StartsWith("Enemy MISS", StringComparison.OrdinalIgnoreCase))
+		if (content.StartsWith("MISS", StringComparison.OrdinalIgnoreCase) ||
+			content.StartsWith("Enemy MISS", StringComparison.OrdinalIgnoreCase))
 		{
 			return LogEntryType.Miss;
 		}
@@ -1814,10 +1862,18 @@
 
 	private static string GetLogCssClass(string line) => ClassifyLogLine(line) switch
 	{
+		_ when line.StartsWith("Round ", StringComparison.OrdinalIgnoreCase) => "log-round",
 		LogEntryType.Hit         => "log-hit",
 		LogEntryType.Miss        => "log-miss",
 		LogEntryType.Destruction => "log-destruction",
 		_                        => string.Empty
+	};
+
+	private static string GetPrefixCssClass(string? prefix) => prefix switch
+	{
+		"[Enemy]" => "log-prefix-enemy",
+		"[Allied]" => "log-prefix-allied",
+		_ => string.Empty
 	};
 
 	private static int GetArmorByClass(MechClass mechClass) => mechClass switch
@@ -1844,13 +1900,21 @@
 		_ => 99
 	};
 
-	private static int GetAttackerMovementModifier(MovementMode mode) => mode switch
+	private static int GetAttackerMovementModifier(MovementMode mode, int hexesMoved)
 	{
-		MovementMode.Walk => 1,
-		MovementMode.Run => 2,
-		MovementMode.Jump => 3,
-		_ => 1
-	};
+		if (hexesMoved <= 0)
+		{
+			return 0;
+		}
+
+		return mode switch
+		{
+			MovementMode.Walk => 1,
+			MovementMode.Run => 2,
+			MovementMode.Jump => 3,
+			_ => 1
+		};
+	}
 
 	private static int GetHeatToHitModifier(int heat) => heat switch
 	{

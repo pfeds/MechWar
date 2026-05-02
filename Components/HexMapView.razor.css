@@ -75,23 +75,23 @@
 }
 
 .mech-token-player .mech-body {
-    fill: #d84f3e;
-    stroke: #2b0f0a;
-}
-
-.mech-token-player .mech-facing {
-    fill: #f6c37d;
-    stroke: #4a2b11;
-}
-
-.mech-token-enemy .mech-body {
     fill: #3f71d1;
     stroke: #0f224a;
 }
 
-.mech-token-enemy .mech-facing {
+.mech-token-player .mech-facing {
     fill: #b5d2ff;
     stroke: #203860;
+}
+
+.mech-token-enemy .mech-body {
+    fill: #d84f3e;
+    stroke: #2b0f0a;
+}
+
+.mech-token-enemy .mech-facing {
+    fill: #f6c37d;
+    stroke: #4a2b11;
 }
 
 .muzzle-flash {
