@@ -6,6 +6,7 @@
     background: radial-gradient(circle at 20% 15%, #2b2c33 0%, #1b1c21 55%, #15161a 100%);
     box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.35);
     padding: 0.6rem;
+    position: relative;
 }
 
 .hex-map {
@@ -58,7 +59,44 @@
 }
 
 .mech-token {
+    pointer-events: all;
+}
+
+.mw-tooltip {
+    position: fixed;
+    z-index: 11000;
+    max-width: 36rem;
+    background: #0b0b0b;
+    border: 1px solid #2f2f2f;
+    border-radius: 0;
+    padding: 0.45rem 0.55rem;
+    color: #49e349;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 0.74rem;
+    line-height: 1.3;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
     pointer-events: none;
+    white-space: pre-wrap;
+}
+
+.mw-tooltip-mech {
+    max-width: 44rem;
+}
+
+.mw-tooltip-title {
+    color: #7ebcff;
+    font-weight: 700;
+    margin-bottom: 0.28rem;
+}
+
+.mw-tooltip-line {
+    color: #49e349;
+}
+
+.mw-tooltip-footer {
+    margin-top: 0.28rem;
+    font-size: 0.66rem;
+    color: #a8c7a8;
 }
 
 .mech-body {

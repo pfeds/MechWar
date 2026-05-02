@@ -1560,7 +1560,7 @@
 		}
 
 		return BuildMechTooltip(
-			"Player Mech",
+			"Player",
 			UserMech,
 			PlayerSections,
 			PlayerComponents,
@@ -1578,7 +1578,7 @@
 		}
 
 		return BuildMechTooltip(
-			"Enemy Mech",
+			"Enemy",
 			EnemyMech,
 			EnemySections,
 			EnemyComponents,
@@ -1605,23 +1605,27 @@
 
 		var lines = new List<string>
 		{
-			title,
-			$"Class: {mech.Class}",
-			$"Facing: {mech.Facing}",
-			$"Hex: ({mech.Column}, {mech.Row}) {terrainContext}",
-			$"Mode: {mode}",
-			$"Movement: {mech.RemainingMovement}/{mech.MaxMovement}",
-			$"Heat: {heat} ({(shutdown ? "Shutdown" : "Online")})",
-			$"Ammo: {(ammoIntact ? "Safe" : "Exploded")}",
-			"Damage by location (Armor/Internal):"
+			$"{title} {mech.Class} Mech",
+			$"Facing: {mech.Facing} | Hex: ({mech.Column}, {mech.Row}) {terrainContext}",
+			$"Mode: {mode} | Movement: {mech.RemainingMovement}/{mech.MaxMovement}",
+			$"Heat: {heat} | Status: {(shutdown ? "Shutdown" : "Online")} | Ammo: {(ammoIntact ? "Safe" : "Exploded")}",
+			"Sections (Armour / Internal):"
 		};
 
 		foreach (var location in Enum.GetValues<HitLocation>())
 		{
-			if (sections.TryGetValue(location, out var section))
+			if (!sections.TryGetValue(location, out var current))
 			{
-				lines.Add($"- {FormatLocation(location)}: {Math.Max(0, section.Armor)}/{Math.Max(0, section.Internal)}");
+				continue;
 			}
+
+			var maxSection = GetMaxSectionForClass(mech.Class, location);
+			var armorPercent = GetPercent(Math.Max(0, current.Armor), maxSection.Armor);
+			var internalPercent = GetPercent(Math.Max(0, current.Internal), maxSection.Internal);
+			var armorBar = BuildRetroBar(armorPercent);
+			var internalBar = BuildRetroBar(internalPercent);
+
+			lines.Add($"- {GetShortLocationLabel(location),-8} A {armorBar} {armorPercent,3}% | I {internalBar} {internalPercent,3}%");
 		}
 
 		var criticalLines = new List<string>();
@@ -1629,22 +1633,69 @@
 		{
 			foreach (var part in parts.Where(part => part.IsDestroyed))
 			{
-				criticalLines.Add($"- {FormatLocation(location)} {FormatComponentType(part.Type)}");
+				criticalLines.Add($"{GetShortLocationLabel(location)} {FormatComponentType(part.Type)}");
 			}
 		}
 
-		if (criticalLines.Count == 0)
-		{
-			lines.Add("Critical damage: None");
-		}
-		else
-		{
-			lines.Add("Critical damage:");
-			lines.AddRange(criticalLines);
-		}
+		lines.Add(criticalLines.Count == 0
+			? "Critical damage: None"
+			: $"Critical damage: {string.Join(", ", criticalLines)}");
 
 		return string.Join("\n", lines);
 	}
+
+	private SectionState GetMaxSectionForClass(MechClass mechClass, HitLocation location)
+	{
+		var scale = mechClass switch
+		{
+			MechClass.Light => 0.8,
+			MechClass.Medium => 1.0,
+			MechClass.Heavy => 1.3,
+			_ => 1.0
+		};
+
+		return location switch
+		{
+			HitLocation.Head => ScaleSection(3, 3, scale),
+			HitLocation.CenterTorso => ScaleSection(10, 8, scale),
+			HitLocation.LeftTorso => ScaleSection(8, 6, scale),
+			HitLocation.RightTorso => ScaleSection(8, 6, scale),
+			HitLocation.LeftArm => ScaleSection(6, 4, scale),
+			HitLocation.RightArm => ScaleSection(6, 4, scale),
+			HitLocation.LeftLeg => ScaleSection(8, 6, scale),
+			HitLocation.RightLeg => ScaleSection(8, 6, scale),
+			_ => ScaleSection(1, 1, scale)
+		};
+	}
+
+	private static int GetPercent(int current, int max)
+	{
+		if (max <= 0)
+		{
+			return 0;
+		}
+
+		return Math.Clamp((int)Math.Round((current / (double)max) * 100), 0, 100);
+	}
+
+	private static string BuildRetroBar(int percent)
+	{
+		var filled = Math.Clamp((int)Math.Round(percent / 10.0), 0, 10);
+		return new string('█', filled) + new string('░', 10 - filled);
+	}
+
+	private static string GetShortLocationLabel(HitLocation location) => location switch
+	{
+		HitLocation.Head => "Head",
+		HitLocation.CenterTorso => "C Torso",
+		HitLocation.LeftTorso => "L Torso",
+		HitLocation.RightTorso => "R Torso",
+		HitLocation.LeftArm => "L Arm",
+		HitLocation.RightArm => "R Arm",
+		HitLocation.LeftLeg => "L Leg",
+		HitLocation.RightLeg => "R Leg",
+		_ => "Unknown"
+	};
 
 	private static string BuildTileContext(HexTile tile)
 	{
@@ -1800,8 +1851,8 @@
 
 	private static string PrefixConsoleLine(string line)
 	{
-		if (line.StartsWith("[Enemy]", StringComparison.OrdinalIgnoreCase) ||
-			line.StartsWith("[Allied]", StringComparison.OrdinalIgnoreCase) ||
+		if (line.StartsWith("[Enemy] ", StringComparison.OrdinalIgnoreCase) ||
+			line.StartsWith("[Allied] ", StringComparison.OrdinalIgnoreCase) ||
 			line.StartsWith("Round ", StringComparison.OrdinalIgnoreCase))
 		{
 			return line;
@@ -1819,12 +1870,12 @@
 	{
 		if (line.StartsWith("[Enemy] ", StringComparison.OrdinalIgnoreCase))
 		{
-			return new("[Enemy]", line.Substring(8));
+			return new("[Enemy] ", line.Substring(8));
 		}
 
 		if (line.StartsWith("[Allied] ", StringComparison.OrdinalIgnoreCase))
 		{
-			return new("[Allied]", line.Substring(9));
+			return new("[Allied] ", line.Substring(9));
 		}
 
 		return new(null, line);
